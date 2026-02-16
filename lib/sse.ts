@@ -1,56 +1,83 @@
 /**
- * In-memory SSE event bus for real-time message delivery.
- * Each conversation ID maps to a set of writable stream controllers.
- * When a new message arrives (from the widget POST or Discord webhook),
- * we push the event to all connected clients for that conversation.
+ * Redis-backed pub/sub for real-time message delivery across serverless functions.
+ *
+ * - `publish(conversationId, data)` is called by the Discord webhook and widget
+ *   message POST routes to push events into a Redis channel.
+ * - `subscribe(conversationId, onMessage)` is called by SSE stream endpoints to
+ *   listen for events. It polls a Redis list (BLPOP is not supported on Upstash
+ *   REST API), so we use a lightweight polling approach against a Redis list.
+ *
+ * The channel name is `chat:{conversationId}`.
  */
 
-type SSEClient = {
-  controller: ReadableStreamDefaultController
-  conversationId: string
+import { Redis } from "@upstash/redis"
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+})
+
+const CHANNEL_PREFIX = "bridgecord:chat:"
+const MESSAGE_TTL = 60 // Seconds to keep messages in the list
+
+/**
+ * Publish a message event to a conversation channel.
+ * Pushes the event JSON into a Redis list and trims old entries.
+ */
+export async function publishMessage(
+  conversationId: string,
+  data: Record<string, unknown>
+) {
+  const key = `${CHANNEL_PREFIX}${conversationId}`
+  const payload = JSON.stringify({ ...data, _ts: Date.now() })
+
+  await redis.rpush(key, payload)
+  // Auto-expire the key so it cleans up if conversation goes idle
+  await redis.expire(key, MESSAGE_TTL)
 }
 
-class SSEBus {
-  private clients = new Map<string, Set<SSEClient>>()
+/**
+ * Poll for new messages from a conversation channel.
+ * Returns all messages pushed since `afterTimestamp`.
+ * Cleans up consumed entries that are older than the TTL.
+ */
+export async function pollMessages(
+  conversationId: string,
+  afterTimestamp: number
+): Promise<Record<string, unknown>[]> {
+  const key = `${CHANNEL_PREFIX}${conversationId}`
+  const raw = await redis.lrange(key, 0, -1)
 
-  subscribe(conversationId: string, controller: ReadableStreamDefaultController): SSEClient {
-    const client: SSEClient = { controller, conversationId }
-    if (!this.clients.has(conversationId)) {
-      this.clients.set(conversationId, new Set())
-    }
-    this.clients.get(conversationId)!.add(client)
-    return client
-  }
+  const results: Record<string, unknown>[] = []
+  const toRemove: string[] = []
 
-  unsubscribe(client: SSEClient) {
-    const set = this.clients.get(client.conversationId)
-    if (set) {
-      set.delete(client)
-      if (set.size === 0) {
-        this.clients.delete(client.conversationId)
+  for (const item of raw) {
+    try {
+      const parsed = typeof item === "string" ? JSON.parse(item) : item
+      const ts = (parsed as { _ts?: number })._ts ?? 0
+
+      if (ts > afterTimestamp) {
+        results.push(parsed as Record<string, unknown>)
+      } else if (Date.now() - ts > MESSAGE_TTL * 1000) {
+        // Old message, mark for cleanup
+        toRemove.push(typeof item === "string" ? item : JSON.stringify(item))
       }
+    } catch {
+      // skip malformed
     }
   }
 
-  emit(conversationId: string, data: Record<string, unknown>) {
-    const set = this.clients.get(conversationId)
-    if (!set) return
-    const payload = `data: ${JSON.stringify(data)}\n\n`
-    const encoder = new TextEncoder()
-    for (const client of set) {
-      try {
-        client.controller.enqueue(encoder.encode(payload))
-      } catch {
-        // Client disconnected, clean up
-        this.unsubscribe(client)
-      }
+  // Clean up old entries (best-effort, non-blocking)
+  if (toRemove.length > 0) {
+    for (const entry of toRemove) {
+      redis.lrem(key, 1, entry).catch(() => {})
     }
   }
 
-  getConnectionCount(conversationId: string): number {
-    return this.clients.get(conversationId)?.size ?? 0
-  }
+  return results
 }
 
-// Singleton
-export const sseBus = new SSEBus()
+// Re-export for backward compat -- the old sseBus.emit() calls now use publishMessage
+export const sseBus = {
+  emit: publishMessage,
+}

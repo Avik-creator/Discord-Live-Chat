@@ -159,13 +159,21 @@ export default function WidgetPage() {
     }
 
     eventSource.onerror = () => {
-      // SSE disconnected, fall back to a single fetch after a delay
-      setTimeout(() => fetchMessages(), 5000)
+      // SSE disconnected -- start polling fallback
+      eventSource.close()
+      sseRef.current = null
     }
+
+    // Polling fallback: fetch messages every 3s regardless of SSE
+    // This ensures messages always arrive even if SSE fails
+    const pollInterval = setInterval(() => {
+      fetchMessages()
+    }, 3000)
 
     return () => {
       eventSource.close()
       sseRef.current = null
+      clearInterval(pollInterval)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, projectId])

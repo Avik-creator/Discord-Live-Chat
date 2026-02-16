@@ -64,13 +64,20 @@ export default function ConversationPage() {
     }
 
     eventSource.onerror = () => {
-      // On disconnect, do a single refetch to catch up
-      setTimeout(() => mutate(), 3000)
+      // SSE disconnected
+      eventSource.close()
+      sseRef.current = null
     }
+
+    // Polling fallback: refetch messages every 3s regardless of SSE
+    const pollInterval = setInterval(() => {
+      mutate()
+    }, 3000)
 
     return () => {
       eventSource.close()
       sseRef.current = null
+      clearInterval(pollInterval)
     }
   }, [conversationId, id, mutate])
 

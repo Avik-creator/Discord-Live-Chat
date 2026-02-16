@@ -1,4 +1,4 @@
-import { sseBus } from "@/lib/sse"
+import { pollMessages } from "@/lib/sse"
 import { db } from "@/lib/db"
 import { conversations } from "@/lib/db/schema"
 import { and, eq } from "drizzle-orm"
@@ -15,8 +15,10 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() })
 }
 
+export const maxDuration = 60 // Allow up to 60s on Vercel
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ projectId: string; id: string }> }
 ) {
   const { projectId, id: conversationId } = await params
@@ -40,28 +42,53 @@ export async function GET(
   }
 
   const encoder = new TextEncoder()
+  let lastTimestamp = Date.now()
+  let alive = true
+
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       // Send initial connection event
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`))
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
+      )
 
-      // Subscribe to events for this conversation
-      const client = sseBus.subscribe(conversationId, controller)
+      // Poll Redis for new messages every 1.5 seconds
+      const poll = async () => {
+        while (alive) {
+          try {
+            const newMessages = await pollMessages(conversationId, lastTimestamp)
+            for (const msg of newMessages) {
+              const ts = (msg as { _ts?: number })._ts ?? Date.now()
+              if (ts > lastTimestamp) lastTimestamp = ts
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(msg)}\n\n`)
+              )
+            }
+          } catch {
+            // Redis poll failed, keep going
+          }
 
-      // Keep-alive heartbeat every 30s
+          // Wait 1.5 seconds before next poll
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+        }
+      }
+
+      poll()
+
+      // Heartbeat every 25 seconds
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": heartbeat\n\n"))
         } catch {
+          alive = false
           clearInterval(heartbeat)
-          sseBus.unsubscribe(client)
         }
-      }, 30000)
+      }, 25000)
 
-      // Cleanup on cancel
-      _req.signal.addEventListener("abort", () => {
+      // Cleanup on client disconnect
+      req.signal.addEventListener("abort", () => {
+        alive = false
         clearInterval(heartbeat)
-        sseBus.unsubscribe(client)
         try {
           controller.close()
         } catch {
