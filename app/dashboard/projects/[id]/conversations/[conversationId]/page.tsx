@@ -1,0 +1,187 @@
+"use client"
+
+import useSWR from "swr"
+import { useParams } from "next/navigation"
+import { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import { Send, User, Headphones, ArrowLeft } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { formatDistanceToNow } from "date-fns"
+import { toast } from "sonner"
+import Link from "next/link"
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+export default function ConversationPage() {
+  const { id, conversationId } = useParams<{
+    id: string
+    conversationId: string
+  }>()
+  const { data, isLoading, mutate } = useSWR(
+    `/api/projects/${id}/conversations/${conversationId}`,
+    fetcher,
+    { refreshInterval: 3000 }
+  )
+  const [reply, setReply] = useState("")
+  const [sending, setSending] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [data?.messages])
+
+  const handleSend = async () => {
+    if (!reply.trim() || sending) return
+    setSending(true)
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/conversations/${conversationId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: reply.trim() }),
+        }
+      )
+      if (!res.ok) throw new Error()
+      setReply("")
+      await mutate()
+    } catch {
+      toast.error("Failed to send reply")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
+  const conversation = data?.conversation
+  const msgs = data?.messages ?? []
+
+  return (
+    <div className="flex flex-col">
+      <Link
+        href={`/dashboard/projects/${id}`}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to conversations
+      </Link>
+
+      {/* Conversation header */}
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+          <User className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              {conversation?.visitorName ||
+                `Visitor ${conversation?.visitorId?.slice(0, 6) ?? ""}`}
+            </h2>
+            <Badge
+              variant={
+                conversation?.status === "open" ? "default" : "secondary"
+              }
+              className="text-xs"
+            >
+              {conversation?.status}
+            </Badge>
+          </div>
+          {conversation?.visitorEmail && (
+            <p className="text-xs text-muted-foreground">
+              {conversation.visitorEmail}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 space-y-3 rounded-lg border border-border bg-card p-4 overflow-y-auto max-h-[60vh]">
+        {msgs.map(
+          (msg: {
+            id: string
+            sender: string
+            content: string
+            createdAt: string
+          }) => (
+            <div
+              key={msg.id}
+              className={cn(
+                "flex gap-2.5",
+                msg.sender === "agent" ? "flex-row-reverse" : ""
+              )}
+            >
+              <div
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                  msg.sender === "agent"
+                    ? "bg-primary/10"
+                    : "bg-muted"
+                )}
+              >
+                {msg.sender === "agent" ? (
+                  <Headphones className="h-3.5 w-3.5 text-primary" />
+                ) : (
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </div>
+              <div
+                className={cn(
+                  "max-w-[70%] rounded-lg px-3 py-2",
+                  msg.sender === "agent"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground"
+                )}
+              >
+                <p className="text-sm">{msg.content}</p>
+                <p
+                  className={cn(
+                    "mt-1 text-xs",
+                    msg.sender === "agent"
+                      ? "text-primary-foreground/70"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatDistanceToNow(new Date(msg.createdAt), {
+                    addSuffix: true,
+                  })}
+                </p>
+              </div>
+            </div>
+          )
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Reply input */}
+      <div className="mt-4 flex gap-2">
+        <Input
+          placeholder="Type a reply... (also sends to Discord)"
+          value={reply}
+          onChange={(e) => setReply(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault()
+              handleSend()
+            }
+          }}
+          disabled={sending}
+        />
+        <Button onClick={handleSend} disabled={sending || !reply.trim()}>
+          <Send className="h-4 w-4" />
+          <span className="sr-only">Send reply</span>
+        </Button>
+      </div>
+    </div>
+  )
+}
