@@ -46,7 +46,7 @@ export default function ProjectInboxPage() {
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 stagger-children">
       {convos.map(
         (conv: {
           id: string
@@ -59,7 +59,7 @@ export default function ProjectInboxPage() {
         }) => (
           <div
             key={conv.id}
-            className="group flex cursor-pointer items-start gap-3 border-b border-border px-3 py-3 transition-colors hover:bg-accent/50"
+            className="group flex cursor-pointer items-start gap-3 border-b border-border px-3 py-3 transition-all duration-200 hover:bg-accent/50 hover:pl-4"
             onClick={() =>
               router.push(
                 `/dashboard/projects/${id}/conversations/${conv.id}`

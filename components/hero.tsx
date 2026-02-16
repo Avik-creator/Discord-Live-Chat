@@ -16,40 +16,51 @@ export function Hero({ isLoggedIn = false }: HeroProps) {
         <div className="grid items-center gap-16 lg:grid-cols-2">
           {/* Left column */}
           <div className="max-w-xl">
-            <div className="mb-6 inline-flex items-center gap-2 border border-border px-3 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span className="inline-block h-1.5 w-1.5 bg-foreground" />
+            <div
+              className="mb-6 inline-flex items-center gap-2 border border-border px-3 py-1 text-[10px] uppercase tracking-widest text-muted-foreground animate-fade-in-down"
+            >
+              <span className="inline-block h-1.5 w-1.5 bg-foreground animate-pulse-soft" />
               Now in public beta
             </div>
 
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl lg:text-5xl text-balance">
+            <h1
+              className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl lg:text-5xl text-balance animate-fade-in-up"
+              style={{ animationDelay: "100ms" }}
+            >
               Live chat that lives in Discord
             </h1>
 
-            <p className="mt-6 text-sm leading-relaxed text-muted-foreground lg:text-base">
+            <p
+              className="mt-6 text-sm leading-relaxed text-muted-foreground lg:text-base animate-fade-in-up"
+              style={{ animationDelay: "200ms" }}
+            >
               Your visitors ask a question on your site. You answer from
               Discord. No dashboards, no extra tools, no context switching.
             </p>
 
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div
+              className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center animate-fade-in-up"
+              style={{ animationDelay: "300ms" }}
+            >
               {isLoggedIn ? (
-                <Button size="lg" className="gap-2 text-xs" asChild>
+                <Button size="lg" className="gap-2 text-xs transition-transform hover:scale-[1.02] active:scale-[0.98]" asChild>
                   <Link href="/dashboard">
                     Go to Projects
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </Link>
                 </Button>
               ) : (
                 <>
-                  <Button size="lg" className="gap-2 text-xs" asChild>
+                  <Button size="lg" className="group gap-2 text-xs transition-transform hover:scale-[1.02] active:scale-[0.98]" asChild>
                     <Link href="/login">
                       Get Started Free
-                      <ArrowRight className="h-3.5 w-3.5" />
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                   </Button>
                   <Button
                     size="lg"
                     variant="outline"
-                    className="text-xs"
+                    className="text-xs transition-transform hover:scale-[1.02] active:scale-[0.98]"
                     asChild
                   >
                     <Link href="#how-it-works">See How It Works</Link>
@@ -59,14 +70,20 @@ export function Hero({ isLoggedIn = false }: HeroProps) {
             </div>
 
             {!isLoggedIn && (
-              <p className="mt-4 text-[10px] text-muted-foreground">
+              <p
+                className="mt-4 text-[10px] text-muted-foreground animate-fade-in"
+                style={{ animationDelay: "500ms" }}
+              >
                 Free forever for 1 site. No credit card required.
               </p>
             )}
           </div>
 
           {/* Right column - Chat Demo */}
-          <div className="flex justify-center lg:justify-end">
+          <div
+            className="flex justify-center lg:justify-end animate-fade-in-right"
+            style={{ animationDelay: "200ms" }}
+          >
             <ChatDemo />
           </div>
         </div>

@@ -115,13 +115,14 @@ export default function ConversationPage() {
               sender: string
               content: string
               createdAt: string
-            }) => (
+            }, index: number) => (
               <div
                 key={msg.id}
                 className={cn(
-                  "flex gap-2.5",
+                  "flex gap-2.5 animate-slide-in-bottom",
                   msg.sender === "agent" ? "flex-row-reverse" : ""
                 )}
+                style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
               >
                 <div
                   className={cn(

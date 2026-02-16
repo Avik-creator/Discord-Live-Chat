@@ -59,7 +59,8 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         <aside
           className={cn(
             "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-card transition-transform duration-200 md:static md:translate-x-0",
-            mobileOpen ? "translate-x-0" : "-translate-x-full"
+            mobileOpen ? "translate-x-0" : "-translate-x-full",
+            "md:animate-fade-in-left"
           )}
         >
           {/* Logo */}

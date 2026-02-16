@@ -13,7 +13,7 @@ export function Navbar({ isLoggedIn = false }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl animate-fade-in-down">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <a href="#" className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center bg-foreground">
@@ -78,7 +78,7 @@ export function Navbar({ isLoggedIn = false }: NavbarProps) {
       </nav>
 
       {mobileOpen && (
-        <div className="border-t border-border bg-background px-6 pb-6 md:hidden">
+        <div className="border-t border-border bg-background px-6 pb-6 md:hidden animate-fade-in-down">
           <div className="flex flex-col gap-4 pt-4">
             <a
               href="#how-it-works"

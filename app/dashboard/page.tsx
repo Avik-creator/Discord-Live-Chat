@@ -98,7 +98,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl animate-fade-in">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -192,7 +192,7 @@ export default function DashboardPage() {
             </p>
           </Card>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 stagger-children">
             {projects?.map(
               (project: {
                 id: string
@@ -202,7 +202,7 @@ export default function DashboardPage() {
               }) => (
                 <Card
                   key={project.id}
-                  className="group relative cursor-pointer border-border transition-colors hover:bg-accent/50"
+                  className="group relative cursor-pointer border-border transition-all duration-300 hover:bg-accent/50 hover:-translate-y-0.5"
                   onClick={() =>
                     router.push(`/dashboard/projects/${project.id}`)
                   }

@@ -1,4 +1,7 @@
+"use client"
+
 import { MessageSquare, Hash, Zap } from "lucide-react"
+import { useRef, useState, useEffect } from "react"
 
 const steps = [
   {
@@ -25,13 +28,31 @@ const steps = [
 ]
 
 export function HowItWorks() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.15 }
+    )
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <section
       id="how-it-works"
       className="border-t border-border py-24 lg:py-32"
+      ref={ref}
     >
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className={`mx-auto max-w-2xl text-center transition-all duration-600 ${visible ? "animate-fade-in-up" : "opacity-0"}`}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             How it works
           </p>
@@ -44,14 +65,14 @@ export function HowItWorks() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
+        <div className={`mt-16 grid gap-6 md:grid-cols-3 ${visible ? "stagger-children" : "opacity-0"}`}>
           {steps.map((step) => (
             <div
               key={step.step}
-              className="group relative border border-border bg-card p-8 transition-colors hover:bg-accent/50"
+              className="group relative border border-border bg-card p-8 transition-all duration-300 hover:bg-accent/50 hover:-translate-y-0.5"
             >
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center bg-foreground">
+                <div className="flex h-10 w-10 items-center justify-center bg-foreground transition-transform duration-300 group-hover:scale-110">
                   <step.icon className="h-4 w-4 text-background" />
                 </div>
                 <span className="text-[10px] font-bold tracking-widest text-muted-foreground">
