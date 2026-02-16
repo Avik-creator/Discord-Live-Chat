@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send, User, Headphones, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
@@ -71,20 +72,20 @@ export default function ConversationPage() {
     <div className="flex flex-col">
       <Link
         href={`/dashboard/projects/${id}`}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="mb-5 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
+        <ArrowLeft className="h-3 w-3" />
         Back to conversations
       </Link>
 
       {/* Conversation header */}
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-          <User className="h-5 w-5 text-muted-foreground" />
+      <div className="mb-4 flex items-center gap-3 border-b border-border pb-4">
+        <div className="flex h-9 w-9 items-center justify-center bg-accent">
+          <User className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-foreground">
+            <h2 className="text-xs font-semibold text-foreground">
               {conversation?.visitorName ||
                 `Visitor ${conversation?.visitorId?.slice(0, 6) ?? ""}`}
             </h2>
@@ -92,13 +93,13 @@ export default function ConversationPage() {
               variant={
                 conversation?.status === "open" ? "default" : "secondary"
               }
-              className="text-xs"
+              className="text-[10px]"
             >
               {conversation?.status}
             </Badge>
           </div>
           {conversation?.visitorEmail && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-muted-foreground">
               {conversation.visitorEmail}
             </p>
           )}
@@ -106,65 +107,67 @@ export default function ConversationPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 rounded-lg border border-border bg-card p-4 overflow-y-auto max-h-[60vh]">
-        {msgs.map(
-          (msg: {
-            id: string
-            sender: string
-            content: string
-            createdAt: string
-          }) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-2.5",
-                msg.sender === "agent" ? "flex-row-reverse" : ""
-              )}
-            >
+      <ScrollArea className="h-[55vh] border border-border bg-card p-4">
+        <div className="space-y-3">
+          {msgs.map(
+            (msg: {
+              id: string
+              sender: string
+              content: string
+              createdAt: string
+            }) => (
               <div
+                key={msg.id}
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                  msg.sender === "agent"
-                    ? "bg-primary/10"
-                    : "bg-muted"
+                  "flex gap-2.5",
+                  msg.sender === "agent" ? "flex-row-reverse" : ""
                 )}
               >
-                {msg.sender === "agent" ? (
-                  <Headphones className="h-3.5 w-3.5 text-primary" />
-                ) : (
-                  <User className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-              </div>
-              <div
-                className={cn(
-                  "max-w-[70%] rounded-lg px-3 py-2",
-                  msg.sender === "agent"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground"
-                )}
-              >
-                <p className="text-sm">{msg.content}</p>
-                <p
+                <div
                   className={cn(
-                    "mt-1 text-xs",
+                    "flex h-6 w-6 shrink-0 items-center justify-center",
                     msg.sender === "agent"
-                      ? "text-primary-foreground/70"
-                      : "text-muted-foreground"
+                      ? "bg-foreground"
+                      : "bg-accent"
                   )}
                 >
-                  {formatDistanceToNow(new Date(msg.createdAt), {
-                    addSuffix: true,
-                  })}
-                </p>
+                  {msg.sender === "agent" ? (
+                    <Headphones className="h-3 w-3 text-background" />
+                  ) : (
+                    <User className="h-3 w-3 text-muted-foreground" />
+                  )}
+                </div>
+                <div
+                  className={cn(
+                    "max-w-[70%] px-3 py-2",
+                    msg.sender === "agent"
+                      ? "bg-foreground text-background"
+                      : "bg-accent text-foreground"
+                  )}
+                >
+                  <p className="text-xs">{msg.content}</p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[10px]",
+                      msg.sender === "agent"
+                        ? "text-background/60"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {formatDistanceToNow(new Date(msg.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                </div>
               </div>
-            </div>
-          )
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            )
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
       {/* Reply input */}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <Input
           placeholder="Type a reply... (also sends to Discord)"
           value={reply}
@@ -176,9 +179,15 @@ export default function ConversationPage() {
             }
           }}
           disabled={sending}
+          className="text-xs"
         />
-        <Button onClick={handleSend} disabled={sending || !reply.trim()}>
-          <Send className="h-4 w-4" />
+        <Button
+          size="icon"
+          onClick={handleSend}
+          disabled={sending || !reply.trim()}
+          className="shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" />
           <span className="sr-only">Send reply</span>
         </Button>
       </div>

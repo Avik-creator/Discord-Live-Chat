@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -15,8 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { Check, ExternalLink, Hash, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,12 +40,15 @@ type Guild = { id: string; name: string; icon: string | null }
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: settings, isLoading, mutate } = useSWR(
-    `/api/projects/${id}/settings`,
-    fetcher
-  )
+  const {
+    data: settings,
+    isLoading,
+    mutate,
+  } = useSWR(`/api/projects/${id}/settings`, fetcher)
   const { data: channels } = useSWR(
-    settings?.discord?.guildId ? `/api/projects/${id}/discord/channels` : null,
+    settings?.discord?.guildId
+      ? `/api/projects/${id}/discord/channels`
+      : null,
     fetcher
   )
 
@@ -67,8 +84,9 @@ export default function SettingsPage() {
       const res = await fetch(`/api/projects/${id}/discord`)
       const data = await res.json()
       window.open(data.url, "_blank", "noopener,noreferrer")
-      // After opening, show the guild picker so user can select which server
-      toast.info("After adding the bot, click 'Refresh Servers' to select your server.")
+      toast.info(
+        "After adding the bot, click 'Refresh Servers' to select your server."
+      )
       setShowGuildPicker(true)
     } catch {
       toast.error("Failed to generate Discord invite link")
@@ -83,7 +101,9 @@ export default function SettingsPage() {
       const data = await res.json()
       setGuilds(data)
       if (data.length === 0) {
-        toast.info("No servers found. Make sure you've added the bot first.")
+        toast.info(
+          "No servers found. Make sure you've added the bot first."
+        )
       }
     } catch {
       toast.error("Failed to fetch servers")
@@ -142,9 +162,9 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
       </div>
     )
   }
@@ -153,13 +173,20 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* Project Info */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-foreground">Project</CardTitle>
-          <CardDescription>General project configuration.</CardDescription>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
+            Project
+          </CardTitle>
+          <CardDescription className="text-xs">
+            General project configuration.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <Separator />
+        <CardContent className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="project-name">Project Name</Label>
+            <Label htmlFor="project-name" className="text-xs">
+              Project Name
+            </Label>
             <Input
               id="project-name"
               value={projectName}
@@ -167,7 +194,9 @@ export default function SettingsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="project-domain">Domain</Label>
+            <Label htmlFor="project-domain" className="text-xs">
+              Domain
+            </Label>
             <Input
               id="project-domain"
               placeholder="myapp.com"
@@ -180,37 +209,47 @@ export default function SettingsPage() {
 
       {/* Discord Connection */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-foreground">Discord</CardTitle>
-          <CardDescription>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
+            Discord
+          </CardTitle>
+          <CardDescription className="text-xs">
             Connect your Discord server to receive and reply to messages.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <Separator />
+        <CardContent className="space-y-4 pt-4">
           {settings?.discord?.guildId ? (
             <>
-              <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5865F2]">
-                  <svg className="h-5 w-5 text-[#fff]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <div className="flex items-center gap-3 border border-border bg-accent/50 p-3">
+                <div className="flex h-9 w-9 items-center justify-center bg-[#5865F2]">
+                  <svg
+                    className="h-4 w-4 text-[#fff]"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
                     <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-xs font-medium text-foreground">
                     {settings.discord.guildName}
                   </p>
-                  <p className="text-xs text-muted-foreground">Connected</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Connected
+                  </p>
                 </div>
-                <Badge variant="secondary" className="gap-1">
-                  <Check className="h-3 w-3" />
+                <Badge variant="secondary" className="gap-1 text-[10px]">
+                  <Check className="h-2.5 w-2.5" />
                   Connected
                 </Badge>
               </div>
 
               {/* Channel selector */}
               <div className="space-y-2">
-                <Label>Chat Channel</Label>
-                <p className="text-xs text-muted-foreground">
+                <Label className="text-xs">Chat Channel</Label>
+                <p className="text-[10px] text-muted-foreground">
                   New conversations will create threads in this channel.
                 </p>
                 <Select value={channelId} onValueChange={setChannelId}>
@@ -222,7 +261,7 @@ export default function SettingsPage() {
                       (ch: { id: string; name: string }) => (
                         <SelectItem key={ch.id} value={ch.id}>
                           <div className="flex items-center gap-2">
-                            <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                            <Hash className="h-3 w-3 text-muted-foreground" />
                             {ch.name}
                           </div>
                         </SelectItem>
@@ -235,39 +274,75 @@ export default function SettingsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setShowGuildPicker(true); fetchGuilds() }}
+                className="text-xs"
+                onClick={() => {
+                  setShowGuildPicker(true)
+                  fetchGuilds()
+                }}
               >
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                <ExternalLink className="mr-1.5 h-3 w-3" />
                 Change Server
               </Button>
             </>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 No Discord server connected yet. Follow these two steps:
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">1</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-foreground text-[10px] font-bold text-background">
+                    1
+                  </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">Add the bot to your server</p>
-                    <p className="text-xs text-muted-foreground mb-2">This opens Discord in a new tab. Select the server you want to use.</p>
-                    <Button size="sm" onClick={handleOpenBotInvite} className="gap-2">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <p className="text-xs font-medium text-foreground">
+                      Add the bot to your server
+                    </p>
+                    <p className="mb-2 text-[10px] text-muted-foreground">
+                      This opens Discord in a new tab. Select the server
+                      you want to use.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={handleOpenBotInvite}
+                      className="gap-1.5 text-xs"
+                    >
+                      <svg
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
                         <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
                       </svg>
                       Add Bot to Server
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <ExternalLink className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">2</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-foreground text-[10px] font-bold text-background">
+                    2
+                  </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">Select your server</p>
-                    <p className="text-xs text-muted-foreground mb-2">{"After adding the bot, click below to pick which server to use."}</p>
-                    <Button size="sm" variant="outline" onClick={() => { setShowGuildPicker(true); fetchGuilds() }} className="gap-2">
-                      <RefreshCw className="h-3.5 w-3.5" />
+                    <p className="text-xs font-medium text-foreground">
+                      Select your server
+                    </p>
+                    <p className="mb-2 text-[10px] text-muted-foreground">
+                      {
+                        "After adding the bot, click below to pick which server to use."
+                      }
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowGuildPicker(true)
+                        fetchGuilds()
+                      }}
+                      className="gap-1.5 text-xs"
+                    >
+                      <RefreshCw className="h-3 w-3" />
                       Load My Servers
                     </Button>
                   </div>
@@ -275,71 +350,88 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-
-          {/* Guild picker dialog */}
-          {showGuildPicker && (
-            <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-foreground">Select a Server</h4>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" onClick={fetchGuilds} disabled={loadingGuilds}>
-                    <RefreshCw className={`h-3.5 w-3.5 ${loadingGuilds ? "animate-spin" : ""}`} />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowGuildPicker(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-              {loadingGuilds ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-12" />
-                  <Skeleton className="h-12" />
-                </div>
-              ) : guilds.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No servers found. Make sure you have added the bot to your Discord server first.
-                </p>
-              ) : (
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {guilds.map((guild) => (
-                    <button
-                      key={guild.id}
-                      onClick={() => handleSelectGuild(guild)}
-                      disabled={savingGuild}
-                      className="flex w-full items-center gap-3 rounded-md p-2 text-left hover:bg-muted transition-colors disabled:opacity-50"
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                        {guild.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{guild.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
+      {/* Guild picker dialog */}
+      <Dialog open={showGuildPicker} onOpenChange={setShowGuildPicker}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Select a Server</DialogTitle>
+            <DialogDescription className="text-xs">
+              Choose which Discord server to connect to this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={fetchGuilds}
+              disabled={loadingGuilds}
+              className="gap-1.5 text-xs"
+            >
+              <RefreshCw
+                className={`h-3 w-3 ${loadingGuilds ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          </div>
+          {loadingGuilds ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </div>
+          ) : guilds.length === 0 ? (
+            <p className="py-8 text-center text-xs text-muted-foreground">
+              No servers found. Make sure you have added the bot to your
+              Discord server first.
+            </p>
+          ) : (
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {guilds.map((guild) => (
+                <button
+                  key={guild.id}
+                  onClick={() => handleSelectGuild(guild)}
+                  disabled={savingGuild}
+                  className="flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center bg-accent text-[10px] font-bold text-muted-foreground">
+                    {guild.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs font-medium text-foreground">
+                    {guild.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Widget Appearance */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-foreground">Widget Appearance</CardTitle>
-          <CardDescription>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
+            Widget Appearance
+          </CardTitle>
+          <CardDescription className="text-xs">
             Customize how the chat widget looks on your website.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <Separator />
+        <CardContent className="space-y-4 pt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="primary-color">Brand Color</Label>
+              <Label htmlFor="primary-color" className="text-xs">
+                Brand Color
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="primary-color"
                   type="color"
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="h-10 w-14 cursor-pointer p-1"
+                  className="h-9 w-12 cursor-pointer p-1"
                 />
                 <Input
                   value={primaryColor}
@@ -350,7 +442,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Position</Label>
+              <Label className="text-xs">Position</Label>
               <Select value={position} onValueChange={setPosition}>
                 <SelectTrigger>
                   <SelectValue />
@@ -363,7 +455,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="welcome-msg">Welcome Message</Label>
+            <Label htmlFor="welcome-msg" className="text-xs">
+              Welcome Message
+            </Label>
             <Textarea
               id="welcome-msg"
               value={welcomeMessage}
@@ -372,7 +466,9 @@ export default function SettingsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="offline-msg">Offline Message</Label>
+            <Label htmlFor="offline-msg" className="text-xs">
+              Offline Message
+            </Label>
             <Textarea
               id="offline-msg"
               value={offlineMessage}
@@ -384,7 +480,7 @@ export default function SettingsPage() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="text-xs">
           {saving ? "Saving..." : "Save Settings"}
         </Button>
       </div>
