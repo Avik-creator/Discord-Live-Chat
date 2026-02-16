@@ -150,6 +150,47 @@ export async function getBotGuilds() {
   }))
 }
 
+/**
+ * Get all guilds the user is in where they have MANAGE_GUILD permission.
+ * Uses the user's OAuth access token (not the bot token).
+ * Discord permission bit for MANAGE_GUILD = 0x20
+ */
+export async function getUserGuilds(accessToken: string) {
+  const res = await fetch(`${DISCORD_API}/users/@me/guilds`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  if (!res.ok) {
+    return []
+  }
+
+  const guilds = await res.json()
+  const MANAGE_GUILD = 0x20
+
+  return guilds
+    .filter(
+      (g: { permissions: string; owner: boolean }) =>
+        g.owner || (parseInt(g.permissions) & MANAGE_GUILD) !== 0
+    )
+    .map(
+      (g: {
+        id: string
+        name: string
+        icon: string | null
+        owner: boolean
+        approximate_member_count?: number
+      }) => ({
+        id: g.id,
+        name: g.name,
+        icon: g.icon,
+        owner: g.owner,
+        memberCount: g.approximate_member_count,
+      })
+    )
+}
+
 /** Get text channels in a guild */
 export async function getGuildChannels(guildId: string) {
   const res = await fetch(`${DISCORD_API}/guilds/${guildId}/channels`, {

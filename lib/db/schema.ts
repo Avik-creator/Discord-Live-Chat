@@ -75,6 +75,7 @@ export const widgetConfigs = pgTable("widget_configs", {
   position: text("position").notNull().default("bottom-right"),
   welcomeMessage: text("welcome_message").notNull().default("Hi! How can we help?"),
   offlineMessage: text("offline_message").notNull().default("We'll get back to you soon."),
+  bubbleShape: text("bubble_shape").notNull().default("rounded"),
 })
 
 export const discordConfigs = pgTable("discord_configs", {

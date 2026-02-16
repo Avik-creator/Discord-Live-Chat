@@ -22,10 +22,25 @@ export async function GET(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const [widget] = await db
-    .select()
-    .from(widgetConfigs)
-    .where(eq(widgetConfigs.projectId, id))
+  let widget = null
+  try {
+    const [w] = await db.select().from(widgetConfigs).where(eq(widgetConfigs.projectId, id))
+    widget = w || null
+  } catch {
+    // bubble_shape column may not exist yet – fall back to selecting known columns
+    const [w] = await db
+      .select({
+        id: widgetConfigs.id,
+        projectId: widgetConfigs.projectId,
+        primaryColor: widgetConfigs.primaryColor,
+        position: widgetConfigs.position,
+        welcomeMessage: widgetConfigs.welcomeMessage,
+        offlineMessage: widgetConfigs.offlineMessage,
+      })
+      .from(widgetConfigs)
+      .where(eq(widgetConfigs.projectId, id))
+    widget = w ? { ...w, bubbleShape: "rounded" } : null
+  }
 
   const [discord] = await db
     .select()
@@ -67,19 +82,21 @@ export async function PUT(
 
   // Update widget config
   if (body.widget) {
-    await db
-      .update(widgetConfigs)
-      .set({
-        ...(body.widget.primaryColor && { primaryColor: body.widget.primaryColor }),
-        ...(body.widget.position && { position: body.widget.position }),
-        ...(body.widget.welcomeMessage !== undefined && {
-          welcomeMessage: body.widget.welcomeMessage,
-        }),
-        ...(body.widget.offlineMessage !== undefined && {
-          offlineMessage: body.widget.offlineMessage,
-        }),
-      })
-      .where(eq(widgetConfigs.projectId, id))
+    const widgetUpdate: Record<string, unknown> = {}
+    if (body.widget.primaryColor) widgetUpdate.primaryColor = body.widget.primaryColor
+    if (body.widget.position) widgetUpdate.position = body.widget.position
+    if (body.widget.welcomeMessage !== undefined) widgetUpdate.welcomeMessage = body.widget.welcomeMessage
+    if (body.widget.offlineMessage !== undefined) widgetUpdate.offlineMessage = body.widget.offlineMessage
+
+    // First, try to save all fields including bubbleShape
+    if (body.widget.bubbleShape) widgetUpdate.bubbleShape = body.widget.bubbleShape
+    try {
+      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
+    } catch {
+      // bubble_shape column may not exist yet – save without it
+      delete widgetUpdate.bubbleShape
+      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
+    }
   }
 
   // Update discord channel selection
