@@ -21,16 +21,16 @@ export default function ProjectLayout({
   const base = `/dashboard/projects/${id}`
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
+        <ArrowLeft className="h-3 w-3" />
         All Projects
       </Link>
 
-      <nav className="flex gap-1 border-b border-border">
+      <nav className="mt-6 flex gap-0 border-b border-border">
         {tabs.map((tab) => {
           const href = `${base}${tab.href}`
           const isActive = pathname === href
@@ -39,20 +39,20 @@ export default function ProjectLayout({
               key={tab.href}
               href={href}
               className={cn(
-                "flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-medium transition-colors",
                 isActive
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              <tab.icon className="h-4 w-4" />
+              <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
             </Link>
           )
         })}
       </nav>
 
-      {children}
+      <div className="mt-6">{children}</div>
     </div>
   )
 }

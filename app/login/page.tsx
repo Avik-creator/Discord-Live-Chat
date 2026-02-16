@@ -18,17 +18,17 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-8 px-4">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <MessageSquare className="h-5 w-5 text-primary-foreground" />
+      <div className="w-full max-w-xs space-y-8 px-4">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center bg-foreground">
+              <MessageSquare className="h-4 w-4 text-background" />
             </div>
-            <span className="font-display text-2xl font-bold text-foreground">
+            <span className="text-sm font-bold uppercase tracking-widest text-foreground">
               Bridgecord
             </span>
           </div>
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-xs text-muted-foreground">
             Sign in with your Discord account to get started
           </p>
         </div>
@@ -36,11 +36,11 @@ export default function LoginPage() {
         <Button
           onClick={handleDiscordLogin}
           disabled={loading}
-          className="w-full gap-2 bg-[#5865F2] text-[#fff] hover:bg-[#4752C4]"
+          className="w-full gap-2 bg-[#5865F2] text-xs text-[#fff] hover:bg-[#4752C4]"
           size="lg"
         >
           <svg
-            className="h-5 w-5"
+            className="h-4 w-4"
             viewBox="0 0 24 24"
             fill="currentColor"
             aria-hidden="true"
@@ -50,8 +50,9 @@ export default function LoginPage() {
           {loading ? "Connecting..." : "Continue with Discord"}
         </Button>
 
-        <p className="text-center text-xs text-muted-foreground">
-          By signing in, you agree to our Terms of Service and Privacy Policy.
+        <p className="text-center text-[10px] text-muted-foreground">
+          By signing in, you agree to our Terms of Service and Privacy
+          Policy.
         </p>
       </div>
     </div>

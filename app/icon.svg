@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#0a0a0a" rx="0"/>
+  <path d="M22.5 8.5a12 12 0 0 0-3-0.9c-0.1 0.2-0.3 0.5-0.4 0.8a11 11 0 0 0-6.2 0c-0.1-0.3-0.3-0.6-0.4-0.8a12 12 0 0 0-3 0.9C6.7 12 6.1 15.4 6.4 18.8a12 12 0 0 0 3.7 1.9c0.3-0.4 0.6-0.8 0.8-1.2a8 8 0 0 1-1.2-0.6l0.3-0.2a8.6 8.6 0 0 0 7.4 0l0.3 0.2a8 8 0 0 1-1.2 0.6c0.2 0.4 0.5 0.8 0.8 1.2a12 12 0 0 0 3.7-1.9c0.4-3.7-0.7-6.9-2.5-9.8zM12.5 17.2c-0.9 0-1.6-0.8-1.6-1.8s0.7-1.8 1.6-1.8 1.6 0.8 1.6 1.8-0.7 1.8-1.6 1.8zm4.8 0c-0.9 0-1.6-0.8-1.6-1.8s0.7-1.8 1.6-1.8 1.6 0.8 1.6 1.8-0.7 1.8-1.6 1.8z" fill="#fafafa"/>
+  <line x1="22" y1="12" x2="26" y2="12" stroke="#fafafa" stroke-width="1.5" stroke-linecap="square"/>
+  <line x1="22" y1="15" x2="26" y2="15" stroke="#fafafa" stroke-width="1.5" stroke-linecap="square"/>
+  <line x1="22" y1="18" x2="26" y2="18" stroke="#fafafa" stroke-width="1.5" stroke-linecap="square"/>
+</svg>
