@@ -50,7 +50,13 @@ import { toast } from "sonner"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
-type Guild = { id: string; name: string; icon: string | null }
+type Guild = {
+  id: string
+  name: string
+  icon: string | null
+  owner?: boolean
+  hasBot?: boolean
+}
 
 const PRESET_COLORS = [
   { name: "Discord", value: "#5865F2" },
