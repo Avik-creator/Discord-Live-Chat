@@ -1,3 +1,5 @@
+"use client"
+
 import {
   Globe,
   Bell,
@@ -6,6 +8,7 @@ import {
   Paintbrush,
   Clock,
 } from "lucide-react"
+import { useRef, useState, useEffect } from "react"
 
 const features = [
   {
@@ -47,13 +50,31 @@ const features = [
 ]
 
 export function Features() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <section
       id="features"
       className="border-t border-border py-24 lg:py-32"
+      ref={ref}
     >
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className={`mx-auto max-w-2xl text-center transition-all duration-600 ${visible ? "animate-fade-in-up" : "opacity-0"}`}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Features
           </p>
@@ -66,13 +87,13 @@ export function Features() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+        <div className={`mt-16 grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 ${visible ? "stagger-children" : "opacity-0"}`}>
           {features.map((feature) => (
             <div
               key={feature.title}
-              className="group bg-card p-7 transition-colors hover:bg-accent/50"
+              className="group bg-card p-7 transition-all duration-300 hover:bg-accent/50"
             >
-              <div className="mb-5 flex h-9 w-9 items-center justify-center bg-foreground">
+              <div className="mb-5 flex h-9 w-9 items-center justify-center bg-foreground transition-transform duration-300 group-hover:scale-110">
                 <feature.icon className="h-4 w-4 text-background" />
               </div>
               <h3 className="text-xs font-bold text-foreground">

@@ -2,7 +2,7 @@ import { MessageSquare } from "lucide-react"
 
 export function Footer() {
   return (
-    <footer className="border-t border-border py-10">
+    <footer className="border-t border-border py-10 animate-fade-in" style={{ animationDelay: "100ms" }}>
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
           <div className="flex items-center gap-2">

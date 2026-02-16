@@ -59,17 +59,15 @@ export function ChatDemo() {
           {messages.slice(0, visibleMessages).map((msg, i) => (
             <div
               key={i}
-              className={`flex ${msg.from === "visitor" ? "justify-end" : "justify-start"}`}
+              className={`flex ${msg.from === "visitor" ? "justify-end" : "justify-start"} animate-slide-in-bottom`}
+              style={{ animationDelay: `${i * 50}ms` }}
             >
               <div
-                className={`max-w-[80%] px-4 py-2.5 text-xs leading-relaxed ${
+                className={`max-w-[80%] px-4 py-2.5 text-xs leading-relaxed transition-all duration-300 ${
                   msg.from === "visitor"
                     ? "bg-foreground text-background"
                     : "bg-secondary text-secondary-foreground"
                 }`}
-                style={{
-                  animation: "fadeSlideUp 0.35s ease-out",
-                }}
               >
                 {msg.text}
               </div>
@@ -77,7 +75,7 @@ export function ChatDemo() {
           ))}
           {visibleMessages < messages.length && visibleMessages > 0 && (
             <div
-              className={`flex ${messages[visibleMessages].from === "agent" ? "justify-start" : "justify-end"}`}
+              className={`flex ${messages[visibleMessages].from === "agent" ? "justify-start" : "justify-end"} animate-fade-in`}
             >
               <div className="flex gap-1 bg-secondary px-4 py-3">
                 <span
@@ -107,19 +105,6 @@ export function ChatDemo() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeSlideUp {
-          from {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </div>
   )
 }
