@@ -34,16 +34,16 @@ export function Footer() {
               Discord
             </a>
             <a
-              href="#"
+              href="#how-it-works"
               className="transition-colors hover:text-foreground"
             >
-              Privacy
+              How It Works
             </a>
             <a
-              href="#"
+              href="#features"
               className="transition-colors hover:text-foreground"
             >
-              Terms
+              Features
             </a>
           </div>
 

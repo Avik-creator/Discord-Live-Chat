@@ -2,7 +2,11 @@ import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function CtaSection() {
+interface CtaSectionProps {
+  isLoggedIn?: boolean
+}
+
+export function CtaSection({ isLoggedIn = false }: CtaSectionProps) {
   return (
     <section className="border-t border-border py-24 lg:py-32">
       <div className="mx-auto max-w-6xl px-6">
@@ -15,20 +19,31 @@ export function CtaSection() {
             forever.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Button size="lg" className="gap-2 text-xs" asChild>
-              <Link href="/login">
-                Get Started Free
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-xs"
-              asChild
-            >
-              <Link href="/login">Talk to Us on Discord</Link>
-            </Button>
+            {isLoggedIn ? (
+              <Button size="lg" className="gap-2 text-xs" asChild>
+                <Link href="/dashboard">
+                  Go to Projects
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button size="lg" className="gap-2 text-xs" asChild>
+                  <Link href="/login">
+                    Get Started Free
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-xs"
+                  asChild
+                >
+                  <Link href="/login">Talk to Us on Discord</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

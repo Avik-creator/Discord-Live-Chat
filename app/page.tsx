@@ -1,22 +1,32 @@
+import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
 import { Navbar } from "@/components/navbar"
 import { Hero } from "@/components/hero"
 import { Integrations } from "@/components/integrations"
 import { HowItWorks } from "@/components/how-it-works"
 import { Features } from "@/components/features"
-import { Pricing } from "@/components/pricing"
 import { CtaSection } from "@/components/cta-section"
 import { Footer } from "@/components/footer"
 
-export default function Page() {
+export default async function Page() {
+  let isLoggedIn = false
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    })
+    isLoggedIn = !!session
+  } catch {
+    // Not logged in
+  }
+
   return (
     <main>
-      <Navbar />
-      <Hero />
+      <Navbar isLoggedIn={isLoggedIn} />
+      <Hero isLoggedIn={isLoggedIn} />
       <Integrations />
       <HowItWorks />
       <Features />
-      <Pricing />
-      <CtaSection />
+      <CtaSection isLoggedIn={isLoggedIn} />
       <Footer />
     </main>
   )

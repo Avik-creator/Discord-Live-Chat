@@ -5,7 +5,11 @@ import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ChatDemo } from "@/components/chat-demo"
 
-export function Hero() {
+interface HeroProps {
+  isLoggedIn?: boolean
+}
+
+export function Hero({ isLoggedIn = false }: HeroProps) {
   return (
     <section className="relative overflow-hidden pt-32 pb-20 lg:pt-44 lg:pb-32">
       <div className="mx-auto max-w-6xl px-6">
@@ -27,25 +31,38 @@ export function Hero() {
             </p>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button size="lg" className="gap-2 text-xs" asChild>
-                <Link href="/login">
-                  Get Started Free
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-xs"
-                asChild
-              >
-                <Link href="#how-it-works">See How It Works</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button size="lg" className="gap-2 text-xs" asChild>
+                  <Link href="/dashboard">
+                    Go to Projects
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" className="gap-2 text-xs" asChild>
+                    <Link href="/login">
+                      Get Started Free
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="text-xs"
+                    asChild
+                  >
+                    <Link href="#how-it-works">See How It Works</Link>
+                  </Button>
+                </>
+              )}
             </div>
 
-            <p className="mt-4 text-[10px] text-muted-foreground">
-              Free forever for 1 site. No credit card required.
-            </p>
+            {!isLoggedIn && (
+              <p className="mt-4 text-[10px] text-muted-foreground">
+                Free forever for 1 site. No credit card required.
+              </p>
+            )}
           </div>
 
           {/* Right column - Chat Demo */}

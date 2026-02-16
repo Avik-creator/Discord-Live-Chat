@@ -2,10 +2,14 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Menu, X, MessageSquare } from "lucide-react"
+import { Menu, X, MessageSquare, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function Navbar() {
+interface NavbarProps {
+  isLoggedIn?: boolean
+}
+
+export function Navbar({ isLoggedIn = false }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -33,26 +37,31 @@ export function Navbar() {
           >
             Features
           </a>
-          <a
-            href="#pricing"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Pricing
-          </a>
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-muted-foreground hover:text-foreground"
-            asChild
-          >
-            <Link href="/login">Log in</Link>
-          </Button>
-          <Button size="sm" className="text-xs" asChild>
-            <Link href="/login">Get Started Free</Link>
-          </Button>
+          {isLoggedIn ? (
+            <Button size="sm" className="gap-2 text-xs" asChild>
+              <Link href="/dashboard">
+                Go to Projects
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                asChild
+              >
+                <Link href="/login">Log in</Link>
+              </Button>
+              <Button size="sm" className="text-xs" asChild>
+                <Link href="/login">Get Started Free</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -85,25 +94,29 @@ export function Navbar() {
             >
               Features
             </a>
-            <a
-              href="#pricing"
-              className="text-xs text-muted-foreground"
-              onClick={() => setMobileOpen(false)}
-            >
-              Pricing
-            </a>
             <div className="flex flex-col gap-2 pt-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="justify-start text-xs text-muted-foreground"
-                asChild
-              >
-                <Link href="/login">Log in</Link>
-              </Button>
-              <Button size="sm" className="text-xs" asChild>
-                <Link href="/login">Get Started Free</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button size="sm" className="gap-2 text-xs" asChild>
+                  <Link href="/dashboard">
+                    Go to Projects
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start text-xs text-muted-foreground"
+                    asChild
+                  >
+                    <Link href="/login">Log in</Link>
+                  </Button>
+                  <Button size="sm" className="text-xs" asChild>
+                    <Link href="/login">Get Started Free</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

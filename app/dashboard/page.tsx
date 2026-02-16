@@ -187,14 +187,9 @@ export default function DashboardPage() {
             <CardDescription className="mt-1 text-xs">
               Create your first project to start chatting with visitors.
             </CardDescription>
-            <Button
-              onClick={() => setOpen(true)}
-              size="sm"
-              className="mt-6 gap-1.5 text-xs"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Project
-            </Button>
+            <p className="mt-4 text-[10px] text-muted-foreground">
+              {"Click \"New Project\" above to get started."}
+            </p>
           </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
