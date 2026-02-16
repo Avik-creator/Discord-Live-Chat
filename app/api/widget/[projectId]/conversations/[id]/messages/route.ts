@@ -13,6 +13,7 @@ import {
   sendThreadMessage,
   getThreadMessages,
 } from "@/lib/discord"
+import { sseBus } from "@/lib/sse"
 
 function corsHeaders() {
   return {
@@ -199,6 +200,19 @@ export async function POST(
     .update(conversations)
     .set({ updatedAt: new Date() })
     .where(eq(conversations.id, conversationId))
+
+  // Push SSE event to all connected clients for this conversation
+  sseBus.emit(conversationId, {
+    type: "new_message",
+    message: {
+      id: msgId,
+      conversationId,
+      sender: "visitor",
+      content: content.trim(),
+      discordMessageId,
+      createdAt: new Date().toISOString(),
+    },
+  })
 
   return NextResponse.json({ id: msgId }, { status: 201, headers: corsHeaders() })
 }

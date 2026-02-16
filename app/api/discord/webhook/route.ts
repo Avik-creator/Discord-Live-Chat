@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { conversations, messages } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { sseBus } from "@/lib/sse"
 
 // This endpoint receives replies from Discord threads.
 // In production, a Discord bot listens for MESSAGE_CREATE gateway events
@@ -48,6 +49,18 @@ export async function POST(req: NextRequest) {
     .update(conversations)
     .set({ updatedAt: new Date(), status: "active" })
     .where(eq(conversations.id, conversation.id))
+
+  // Push SSE event to all connected clients for this conversation
+  sseBus.emit(conversation.id, {
+    type: "new_message",
+    message: {
+      id: msg.id,
+      conversationId: conversation.id,
+      sender: "agent",
+      content,
+      createdAt: new Date().toISOString(),
+    },
+  })
 
   return NextResponse.json({ success: true, message: msg })
 }

@@ -16,6 +16,13 @@ import Link from "next/link"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+interface MessageData {
+  id: string
+  sender: string
+  content: string
+  createdAt: string
+}
+
 export default function ConversationPage() {
   const { id, conversationId } = useParams<{
     id: string
@@ -23,16 +30,67 @@ export default function ConversationPage() {
   }>()
   const { data, isLoading, mutate } = useSWR(
     `/api/projects/${id}/conversations/${conversationId}`,
-    fetcher,
-    { refreshInterval: 3000 }
+    fetcher
   )
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
+  const [sseMessages, setSseMessages] = useState<MessageData[]>([])
+  const [animateIds, setAnimateIds] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const sseRef = useRef<EventSource | null>(null)
 
+  // Set up SSE connection for live updates
+  useEffect(() => {
+    if (!conversationId || !id) return
+
+    const eventSource = new EventSource(
+      `/api/projects/${id}/conversations/${conversationId}/stream`
+    )
+    sseRef.current = eventSource
+
+    eventSource.onmessage = (event) => {
+      try {
+        const eventData = JSON.parse(event.data)
+        if (eventData.type === "new_message" && eventData.message) {
+          setSseMessages((prev) => {
+            if (prev.some((m) => m.id === eventData.message.id)) return prev
+            return [...prev, eventData.message]
+          })
+          setAnimateIds((prev) => new Set(prev).add(eventData.message.id))
+        }
+      } catch {
+        // silent
+      }
+    }
+
+    eventSource.onerror = () => {
+      // On disconnect, do a single refetch to catch up
+      setTimeout(() => mutate(), 3000)
+    }
+
+    return () => {
+      eventSource.close()
+      sseRef.current = null
+    }
+  }, [conversationId, id, mutate])
+
+  // Merge SWR data with SSE messages
+  const baseMessages: MessageData[] = data?.messages ?? []
+  const mergedMessages = [...baseMessages]
+  for (const sseMsg of sseMessages) {
+    if (!mergedMessages.some((m) => m.id === sseMsg.id)) {
+      mergedMessages.push(sseMsg)
+    }
+  }
+  // Sort by createdAt
+  mergedMessages.sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [data?.messages])
+  }, [mergedMessages.length])
 
   const handleSend = async () => {
     if (!reply.trim() || sending) return
@@ -66,7 +124,6 @@ export default function ConversationPage() {
   }
 
   const conversation = data?.conversation
-  const msgs = data?.messages ?? []
 
   return (
     <div className="flex flex-col">
@@ -104,32 +161,37 @@ export default function ConversationPage() {
             </p>
           )}
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 animate-pulse bg-emerald-500" style={{ borderRadius: "50%" }} />
+          <span className="text-[10px] text-muted-foreground">Live</span>
+        </div>
       </div>
 
       {/* Messages */}
       <ScrollArea className="h-[55vh] border border-border bg-card p-4">
         <div className="space-y-3">
-          {msgs.map(
-            (msg: {
-              id: string
-              sender: string
-              content: string
-              createdAt: string
-            }, index: number) => (
+          {mergedMessages.map((msg) => {
+            const shouldAnimate = animateIds.has(msg.id)
+            return (
               <div
                 key={msg.id}
                 className={cn(
-                  "flex gap-2.5 animate-slide-in-bottom",
-                  msg.sender === "agent" ? "flex-row-reverse" : ""
+                  "flex gap-2.5",
+                  msg.sender === "agent" ? "flex-row-reverse" : "",
+                  shouldAnimate ? "animate-slide-in-bottom" : ""
                 )}
-                style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+                onAnimationEnd={() => {
+                  setAnimateIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(msg.id)
+                    return next
+                  })
+                }}
               >
                 <div
                   className={cn(
                     "flex h-6 w-6 shrink-0 items-center justify-center",
-                    msg.sender === "agent"
-                      ? "bg-foreground"
-                      : "bg-accent"
+                    msg.sender === "agent" ? "bg-foreground" : "bg-accent"
                   )}
                 >
                   {msg.sender === "agent" ? (
@@ -162,7 +224,7 @@ export default function ConversationPage() {
                 </div>
               </div>
             )
-          )}
+          })}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>

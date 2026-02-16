@@ -153,17 +153,37 @@ function ColorPicker({
   )
 }
 
+const BUBBLE_SHAPES = [
+  { value: "rounded", label: "Rounded", description: "Soft corners with a tail" },
+  { value: "sharp", label: "Sharp", description: "Square, no border-radius" },
+  { value: "pill", label: "Pill", description: "Fully rounded capsule" },
+  { value: "cloud", label: "Cloud", description: "Asymmetric speech bubble" },
+] as const
+
+function getPreviewRadius(shape: string, sender: "visitor" | "agent") {
+  switch (shape) {
+    case "sharp": return "0px"
+    case "pill": return "14px"
+    case "cloud": return sender === "visitor" ? "12px 12px 3px 12px" : "12px 12px 12px 3px"
+    case "rounded": default: return sender === "visitor" ? "10px 10px 3px 10px" : "10px 10px 10px 3px"
+  }
+}
+
 function WidgetPreview({
   primaryColor,
   welcomeMessage,
   position,
+  bubbleShape,
 }: {
   primaryColor: string
   welcomeMessage: string
   position: string
+  bubbleShape: string
 }) {
+  const fabRadius = bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px"
+  const windowRadius = bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "16px" : "8px"
   return (
-    <div className="relative h-72 w-full overflow-hidden border border-border bg-muted/30">
+    <div className="relative h-80 w-full overflow-hidden border border-border bg-muted/30">
       {/* Fake website background */}
       <div className="absolute inset-0 p-4">
         <div className="h-2 w-20 bg-muted" />
@@ -181,22 +201,54 @@ function WidgetPreview({
         } w-52`}
       >
         {/* Chat window */}
-        <div className="mb-2 border border-border bg-card">
+        <div
+          className="mb-2 overflow-hidden border border-border bg-card"
+          style={{ borderRadius: windowRadius }}
+        >
           <div
             className="flex items-center gap-2 px-3 py-2"
-            style={{ backgroundColor: primaryColor }}
+            style={{
+              backgroundColor: primaryColor,
+              borderRadius: bubbleShape === "pill" ? "14px 14px 0 0" : undefined,
+            }}
           >
             <MessageSquare className="h-3 w-3 text-white" />
             <span className="text-[9px] font-bold text-white">Chat</span>
           </div>
-          <div className="p-2.5">
-            <div
-              className="inline-block px-2 py-1 text-[8px] text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              {welcomeMessage || "Hi! How can we help?"}
+          <div className="space-y-1.5 p-2.5">
+            {/* Agent bubble */}
+            <div className="flex gap-1.5">
+              <div
+                className="inline-block max-w-[75%] px-2 py-1 text-[8px]"
+                style={{
+                  backgroundColor: `${primaryColor}18`,
+                  color: "var(--foreground)",
+                  borderRadius: getPreviewRadius(bubbleShape, "agent"),
+                  border: `1px solid ${primaryColor}25`,
+                }}
+              >
+                {welcomeMessage?.slice(0, 40) || "Hi! How can we help?"}
+              </div>
             </div>
-            <div className="mt-2 flex items-center gap-1 border border-border bg-background px-2 py-1.5">
+            {/* Visitor bubble */}
+            <div className="flex justify-end">
+              <div
+                className="inline-block max-w-[75%] px-2 py-1 text-[8px] text-white"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderRadius: getPreviewRadius(bubbleShape, "visitor"),
+                }}
+              >
+                {"I have a question!"}
+              </div>
+            </div>
+            {/* Input */}
+            <div
+              className="mt-1 flex items-center gap-1 border border-border bg-background px-2 py-1.5"
+              style={{
+                borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "14px" : "6px",
+              }}
+            >
               <span className="flex-1 text-[8px] text-muted-foreground">
                 Type a message...
               </span>
@@ -207,12 +259,12 @@ function WidgetPreview({
 
         {/* FAB */}
         <div
-          className={`flex h-8 w-8 items-center justify-center ${
+          className={`flex h-9 w-9 items-center justify-center transition-all ${
             position === "bottom-left" ? "" : "ml-auto"
           }`}
-          style={{ backgroundColor: primaryColor }}
+          style={{ backgroundColor: primaryColor, borderRadius: fabRadius }}
         >
-          <MessageSquare className="h-3.5 w-3.5 text-white" />
+          <MessageSquare className="h-4 w-4 text-white" />
         </div>
       </div>
     </div>
@@ -239,6 +291,7 @@ export default function SettingsPage() {
   const [position, setPosition] = useState("bottom-right")
   const [welcomeMessage, setWelcomeMessage] = useState("")
   const [offlineMessage, setOfflineMessage] = useState("")
+  const [bubbleShape, setBubbleShape] = useState("rounded")
   const [channelId, setChannelId] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -256,6 +309,7 @@ export default function SettingsPage() {
       setPosition(settings.widget?.position || "bottom-right")
       setWelcomeMessage(settings.widget?.welcomeMessage || "")
       setOfflineMessage(settings.widget?.offlineMessage || "")
+      setBubbleShape(settings.widget?.bubbleShape || "rounded")
       setChannelId(settings.discord?.channelId || "")
     }
   }, [settings])
@@ -324,7 +378,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           name: projectName,
           domain,
-          widget: { primaryColor, position, welcomeMessage, offlineMessage },
+          widget: { primaryColor, position, welcomeMessage, offlineMessage, bubbleShape },
           discord: channelId
             ? { channelId, channelName: selectedChannel?.name }
             : undefined,
@@ -619,6 +673,51 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
+                <Label className="text-xs">Bubble Shape</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Choose the style of message bubbles in the chat.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {BUBBLE_SHAPES.map((shape) => (
+                    <button
+                      key={shape.value}
+                      type="button"
+                      onClick={() => setBubbleShape(shape.value)}
+                      className={`flex flex-col items-center gap-1.5 border p-3 transition-all hover:bg-accent/50 ${
+                        bubbleShape === shape.value
+                          ? "border-foreground bg-accent/30"
+                          : "border-border"
+                      }`}
+                    >
+                      {/* Mini bubble preview */}
+                      <div className="flex w-full items-end justify-end">
+                        <div
+                          className="h-3 w-12"
+                          style={{
+                            backgroundColor: primaryColor,
+                            borderRadius: getPreviewRadius(shape.value, "visitor"),
+                          }}
+                        />
+                      </div>
+                      <div className="flex w-full items-start">
+                        <div
+                          className="h-3 w-10"
+                          style={{
+                            backgroundColor: `${primaryColor}20`,
+                            border: `1px solid ${primaryColor}30`,
+                            borderRadius: getPreviewRadius(shape.value, "agent"),
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-medium text-foreground">
+                        {shape.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="welcome-msg" className="text-xs">
                   Welcome Message
                 </Label>
@@ -662,6 +761,7 @@ export default function SettingsPage() {
                 primaryColor={primaryColor}
                 welcomeMessage={welcomeMessage}
                 position={position}
+                bubbleShape={bubbleShape}
               />
             </CardContent>
           </Card>

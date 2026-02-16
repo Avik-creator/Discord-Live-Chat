@@ -78,6 +78,7 @@ export async function PUT(
         ...(body.widget.offlineMessage !== undefined && {
           offlineMessage: body.widget.offlineMessage,
         }),
+        ...(body.widget.bubbleShape && { bubbleShape: body.widget.bubbleShape }),
       })
       .where(eq(widgetConfigs.projectId, id))
   }

@@ -45,6 +45,7 @@ export async function GET(
       position: widget?.position || "bottom-right",
       welcomeMessage: widget?.welcomeMessage || "Hi! How can we help?",
       offlineMessage: widget?.offlineMessage || "We'll get back to you soon.",
+      bubbleShape: widget?.bubbleShape || "rounded",
     },
     { headers: corsHeaders() }
   )
