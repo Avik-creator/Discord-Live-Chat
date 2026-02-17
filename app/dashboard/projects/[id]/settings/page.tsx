@@ -1,56 +1,13 @@
-"use client"
+import { auth } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { projects, widgetConfigs, discordConfigs, account } from "@/lib/db/schema"
+import { and, eq } from "drizzle-orm"
+import { headers } from "next/headers"
+import { redirect, notFound } from "next/navigation"
+import { getUserGuilds, getBotGuilds, refreshDiscordToken } from "@/lib/discord"
+import { SettingsTabs } from "./_components/settings-tabs"
 
-import useSWR from "swr"
-import { useParams } from "next/navigation"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Check,
-  ExternalLink,
-  Hash,
-  RefreshCw,
-  Paintbrush,
-  MessageSquare,
-  Send,
-} from "lucide-react"
-import { toast } from "sonner"
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-type Guild = {
+type GuildEntry = {
   id: string
   name: string
   icon: string | null
@@ -58,908 +15,214 @@ type Guild = {
   hasBot?: boolean
 }
 
-const PRESET_COLORS = [
-  { name: "Discord", value: "#5865F2" },
-  { name: "Red", value: "#EF4444" },
-  { name: "Orange", value: "#F97316" },
-  { name: "Amber", value: "#F59E0B" },
-  { name: "Emerald", value: "#10B981" },
-  { name: "Teal", value: "#14B8A6" },
-  { name: "Cyan", value: "#06B6D4" },
-  { name: "Blue", value: "#3B82F6" },
-  { name: "Violet", value: "#8B5CF6" },
-  { name: "Pink", value: "#EC4899" },
-  { name: "Rose", value: "#F43F5E" },
-  { name: "Slate", value: "#64748B" },
-]
-
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (color: string) => void
-}) {
-  const [customColor, setCustomColor] = useState(value)
-
-  useEffect(() => {
-    setCustomColor(value)
-  }, [value])
-
-  const handleCustomChange = (hex: string) => {
-    setCustomColor(hex)
-    if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-      onChange(hex)
-    }
+/**
+ * Fetch guilds for the server list. Tries user token first (shows all
+ * admin/owner servers), falls back to bot-only guilds if user token fails.
+ */
+async function fetchGuilds(userId: string): Promise<GuildEntry[]> {
+  // 1. Get bot guilds (always available via bot token)
+  let botGuilds: { id: string; name: string; icon: string | null }[] = []
+  const botGuildIds = new Set<string>()
+  try {
+    botGuilds = await getBotGuilds()
+    for (const g of botGuilds) botGuildIds.add(g.id)
+  } catch {
+    // Bot token issue - continue with empty
   }
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex h-9 items-center gap-2.5 border border-border bg-card px-3 transition-colors hover:bg-accent"
-        >
-          <div
-            className="h-4 w-4 border border-border"
-            style={{ backgroundColor: value }}
-          />
-          <span className="text-xs font-medium text-foreground">{value}</span>
-          <Paintbrush className="ml-1 h-3 w-3 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <div className="p-3">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Presets
-          </p>
-          <div className="grid grid-cols-6 gap-1.5">
-            {PRESET_COLORS.map((color) => (
-              <button
-                key={color.value}
-                type="button"
-                onClick={() => onChange(color.value)}
-                className="group relative flex h-7 w-7 items-center justify-center border border-border transition-all hover:scale-110"
-                style={{ backgroundColor: color.value }}
-                title={color.name}
-              >
-                {value === color.value && (
-                  <Check className="h-3 w-3 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-        <Separator />
-        <div className="p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Custom
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={customColor}
-              onChange={(e) => {
-                setCustomColor(e.target.value)
-                onChange(e.target.value)
-              }}
-              className="h-8 w-8 cursor-pointer border border-border bg-transparent p-0"
-            />
-            <Input
-              value={customColor}
-              onChange={(e) => handleCustomChange(e.target.value)}
-              placeholder="#5865F2"
-              className="h-8 flex-1 text-xs"
-              maxLength={7}
-            />
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-const BUBBLE_SHAPES = [
-  { value: "rounded", label: "Rounded", description: "Soft corners with a tail" },
-  { value: "sharp", label: "Sharp", description: "Square, no border-radius" },
-  { value: "pill", label: "Pill", description: "Fully rounded capsule" },
-  { value: "cloud", label: "Cloud", description: "Asymmetric speech bubble" },
-] as const
-
-function getPreviewRadius(shape: string, sender: "visitor" | "agent") {
-  switch (shape) {
-    case "sharp": return "0px"
-    case "pill": return "14px"
-    case "cloud": return sender === "visitor" ? "12px 12px 3px 12px" : "12px 12px 12px 3px"
-    case "rounded": default: return sender === "visitor" ? "10px 10px 3px 10px" : "10px 10px 10px 3px"
-  }
-}
-
-function WidgetPreview({
-  primaryColor,
-  welcomeMessage,
-  position,
-  bubbleShape,
-}: {
-  primaryColor: string
-  welcomeMessage: string
-  position: string
-  bubbleShape: string
-}) {
-  const fabRadius = bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px"
-  const windowRadius = bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "16px" : "8px"
-  return (
-    <div className="relative h-80 w-full overflow-hidden border border-border bg-muted/30">
-      {/* Fake website background */}
-      <div className="absolute inset-0 p-4">
-        <div className="h-2 w-20 bg-muted" />
-        <div className="mt-3 h-1.5 w-32 bg-muted/60" />
-        <div className="mt-2 h-1.5 w-28 bg-muted/40" />
-        <div className="mt-6 h-8 w-full bg-muted/20" />
-        <div className="mt-3 h-8 w-full bg-muted/20" />
-        <div className="mt-3 h-8 w-3/4 bg-muted/20" />
-      </div>
-
-      {/* Chat widget preview */}
-      <div
-        className={`absolute bottom-3 ${
-          position === "bottom-left" ? "left-3" : "right-3"
-        } w-52`}
-      >
-        {/* Chat window */}
-        <div
-          className="mb-2 overflow-hidden border border-border bg-card"
-          style={{ borderRadius: windowRadius }}
-        >
-          <div
-            className="flex items-center gap-2 px-3 py-2"
-            style={{
-              backgroundColor: primaryColor,
-              borderRadius: bubbleShape === "pill" ? "14px 14px 0 0" : undefined,
-            }}
-          >
-            <MessageSquare className="h-3 w-3 text-white" />
-            <span className="text-[9px] font-bold text-white">Chat</span>
-          </div>
-          <div className="space-y-1.5 p-2.5">
-            {/* Agent bubble */}
-            <div className="flex gap-1.5">
-              <div
-                className="inline-block max-w-[75%] px-2 py-1 text-[8px]"
-                style={{
-                  backgroundColor: `${primaryColor}18`,
-                  color: "var(--foreground)",
-                  borderRadius: getPreviewRadius(bubbleShape, "agent"),
-                  border: `1px solid ${primaryColor}25`,
-                }}
-              >
-                {welcomeMessage?.slice(0, 40) || "Hi! How can we help?"}
-              </div>
-            </div>
-            {/* Visitor bubble */}
-            <div className="flex justify-end">
-              <div
-                className="inline-block max-w-[75%] px-2 py-1 text-[8px] text-white"
-                style={{
-                  backgroundColor: primaryColor,
-                  borderRadius: getPreviewRadius(bubbleShape, "visitor"),
-                }}
-              >
-                {"I have a question!"}
-              </div>
-            </div>
-            {/* Input */}
-            <div
-              className="mt-1 flex items-center gap-1 border border-border bg-background px-2 py-1.5"
-              style={{
-                borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "14px" : "6px",
-              }}
-            >
-              <span className="flex-1 text-[8px] text-muted-foreground">
-                Type a message...
-              </span>
-              <Send className="h-2.5 w-2.5 text-muted-foreground" />
-            </div>
-          </div>
-        </div>
-
-        {/* FAB */}
-        <div
-          className={`flex h-9 w-9 items-center justify-center transition-all ${
-            position === "bottom-left" ? "" : "ml-auto"
-          }`}
-          style={{ backgroundColor: primaryColor, borderRadius: fabRadius }}
-        >
-          <MessageSquare className="h-4 w-4 text-white" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function SettingsPage() {
-  const { id } = useParams<{ id: string }>()
-  const {
-    data: settings,
-    isLoading,
-    mutate,
-  } = useSWR(`/api/projects/${id}/settings`, fetcher)
-  const { data: channels } = useSWR(
-    settings?.discord?.guildId
-      ? `/api/projects/${id}/discord/channels`
-      : null,
-    fetcher
-  )
-
-  const [projectName, setProjectName] = useState("")
-  const [domain, setDomain] = useState("")
-  const [primaryColor, setPrimaryColor] = useState("#5865F2")
-  const [position, setPosition] = useState("bottom-right")
-  const [welcomeMessage, setWelcomeMessage] = useState("")
-  const [offlineMessage, setOfflineMessage] = useState("")
-  const [bubbleShape, setBubbleShape] = useState("rounded")
-  const [channelId, setChannelId] = useState("")
-  const [saving, setSaving] = useState(false)
-
-  // Guild selection state
-  const [showGuildPicker, setShowGuildPicker] = useState(false)
-  const [guilds, setGuilds] = useState<Guild[]>([])
-  const [loadingGuilds, setLoadingGuilds] = useState(false)
-  const [savingGuild, setSavingGuild] = useState(false)
-
-  useEffect(() => {
-    if (settings) {
-      setProjectName(settings.project?.name || "")
-      setDomain(settings.project?.domain || "")
-      setPrimaryColor(settings.widget?.primaryColor || "#5865F2")
-      setPosition(settings.widget?.position || "bottom-right")
-      setWelcomeMessage(settings.widget?.welcomeMessage || "")
-      setOfflineMessage(settings.widget?.offlineMessage || "")
-      setBubbleShape(settings.widget?.bubbleShape || "rounded")
-      setChannelId(settings.discord?.channelId || "")
-    }
-  }, [settings])
-
-  const handleOpenBotInvite = async () => {
-    try {
-      const res = await fetch(`/api/projects/${id}/discord`)
-      const data = await res.json()
-      window.open(data.url, "_blank", "noopener,noreferrer")
-      toast.info(
-        "After adding the bot, click 'Refresh Servers' to select your server."
-      )
-      setShowGuildPicker(true)
-    } catch {
-      toast.error("Failed to generate Discord invite link")
-    }
-  }
-
-  const fetchGuilds = async () => {
-    setLoadingGuilds(true)
-    try {
-      const res = await fetch(`/api/projects/${id}/discord/guilds`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setGuilds(data)
-      if (data.length === 0) {
-        toast.info(
-          "No servers found. Make sure you've added the bot first."
-        )
-      }
-    } catch {
-      toast.error("Failed to fetch servers")
-    } finally {
-      setLoadingGuilds(false)
-    }
-  }
-
-  const handleSelectGuild = async (guild: Guild) => {
-    setSavingGuild(true)
-    try {
-      const res = await fetch(`/api/projects/${id}/discord`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guildId: guild.id, guildName: guild.name }),
-      })
-      if (!res.ok) throw new Error()
-      await mutate()
-      setShowGuildPicker(false)
-      toast.success(`Connected to ${guild.name}!`)
-    } catch {
-      toast.error("Failed to save server selection")
-    } finally {
-      setSavingGuild(false)
-    }
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      const selectedChannel = channels?.find(
-        (c: { id: string; name: string }) => c.id === channelId
-      )
-      const res = await fetch(`/api/projects/${id}/settings`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: projectName,
-          domain,
-          widget: { primaryColor, position, welcomeMessage, offlineMessage, bubbleShape },
-          discord: channelId
-            ? { channelId, channelName: selectedChannel?.name }
-            : undefined,
-        }),
-      })
-      if (!res.ok) throw new Error()
-      await mutate()
-      toast.success("Settings saved")
-    } catch {
-      toast.error("Failed to save settings")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-      </div>
+  // 2. Get the user's Discord account
+  const [discordAccount] = await db
+    .select()
+    .from(account)
+    .where(
+      and(eq(account.userId, userId), eq(account.providerId, "discord"))
     )
+
+  if (!discordAccount?.accessToken) {
+    // No user token at all - return bot guilds as fallback
+    return botGuilds.map((g) => ({ ...g, owner: false, hasBot: true }))
   }
 
+  // 3. Try to get user guilds, refreshing token if needed
+  const userGuilds = await tryGetUserGuilds(discordAccount, botGuildIds)
+
+  if (userGuilds) return userGuilds
+
+  // 4. Fallback: return bot guilds so the user at least sees something
+  return botGuilds.map((g) => ({ ...g, owner: false, hasBot: true }))
+}
+
+/**
+ * Attempt to fetch user guilds. If the token is expired or returns 401,
+ * refresh and retry once. Returns null if all attempts fail.
+ */
+async function tryGetUserGuilds(
+  discordAccount: {
+    id: string
+    accessToken: string | null
+    refreshToken: string | null
+    accessTokenExpiresAt: Date | null
+  },
+  botGuildIds: Set<string>
+): Promise<GuildEntry[] | null> {
+  let accessToken = discordAccount.accessToken!
+
+  // Pre-emptive refresh if the stored expiry has passed
+  const isExpired =
+    discordAccount.accessTokenExpiresAt &&
+    new Date(discordAccount.accessTokenExpiresAt) <= new Date()
+
+  if (isExpired) {
+    const refreshed = await attemptRefresh(discordAccount)
+    if (refreshed) {
+      accessToken = refreshed
+    } else {
+      return null
+    }
+  }
+
+  // First attempt
+  try {
+    return mapUserGuilds(await getUserGuilds(accessToken), botGuildIds)
+  } catch {
+    // Token might be invalid even if not "expired" -- refresh and retry
+    const refreshed = await attemptRefresh(discordAccount)
+    if (!refreshed) return null
+
+    try {
+      return mapUserGuilds(await getUserGuilds(refreshed), botGuildIds)
+    } catch {
+      return null
+    }
+  }
+}
+
+async function attemptRefresh(
+  discordAccount: {
+    id: string
+    refreshToken: string | null
+  }
+): Promise<string | null> {
+  if (!discordAccount.refreshToken) return null
+
+  const refreshed = await refreshDiscordToken(discordAccount.refreshToken)
+  if (!refreshed) return null
+
+  await db
+    .update(account)
+    .set({
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token,
+      accessTokenExpiresAt: new Date(
+        Date.now() + refreshed.expires_in * 1000
+      ),
+      updatedAt: new Date(),
+    })
+    .where(eq(account.id, discordAccount.id))
+
+  return refreshed.access_token
+}
+
+function mapUserGuilds(
+  userGuilds: {
+    id: string
+    name: string
+    icon: string | null
+    owner: boolean
+  }[],
+  botGuildIds: Set<string>
+): GuildEntry[] {
+  const mapped = userGuilds.map((g) => ({
+    id: g.id,
+    name: g.name,
+    icon: g.icon,
+    owner: g.owner,
+    hasBot: botGuildIds.has(g.id),
+  }))
+  // Bot-installed servers first, then alphabetical
+  mapped.sort((a, b) => {
+    if (a.hasBot !== b.hasBot) return a.hasBot ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+  return mapped
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default async function SettingsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session) redirect("/login")
+
+  const { id } = await params
+
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
+
+  if (!project) notFound()
+
+  // Fetch widget config
+  let widget = null
+  try {
+    const [w] = await db
+      .select()
+      .from(widgetConfigs)
+      .where(eq(widgetConfigs.projectId, id))
+    widget = w || null
+  } catch {
+    const [w] = await db
+      .select({
+        id: widgetConfigs.id,
+        projectId: widgetConfigs.projectId,
+        primaryColor: widgetConfigs.primaryColor,
+        position: widgetConfigs.position,
+        welcomeMessage: widgetConfigs.welcomeMessage,
+        offlineMessage: widgetConfigs.offlineMessage,
+      })
+      .from(widgetConfigs)
+      .where(eq(widgetConfigs.projectId, id))
+    widget = w ? { ...w, bubbleShape: "rounded" } : null
+  }
+
+  // Fetch discord config
+  const [discord] = await db
+    .select()
+    .from(discordConfigs)
+    .where(eq(discordConfigs.projectId, id))
+
+  // Fetch guilds only when not connected yet
+  const guilds = discord ? [] : await fetchGuilds(session.user.id)
+
+  const widgetData = {
+    primaryColor: widget?.primaryColor ?? "#5865F2",
+    position: widget?.position ?? "bottom-right",
+    welcomeMessage: widget?.welcomeMessage ?? "",
+    offlineMessage: widget?.offlineMessage ?? "",
+    bubbleShape:
+      (widget as { bubbleShape?: string } | null)?.bubbleShape ?? "rounded",
+  }
+
+  const discordData = discord
+    ? {
+        guildId: discord.guildId,
+        guildName: discord.guildName,
+        channelId: discord.channelId ?? undefined,
+        channelName: discord.channelName ?? undefined,
+      }
+    : null
+
   return (
-    <Tabs defaultValue="general" className="space-y-6">
-      <TabsList>
-        <TabsTrigger value="general" className="text-xs">
-          General
-        </TabsTrigger>
-        <TabsTrigger value="discord" className="text-xs">
-          Discord
-        </TabsTrigger>
-        <TabsTrigger value="widget" className="text-xs">
-          Widget
-        </TabsTrigger>
-      </TabsList>
-
-      {/* General tab */}
-      <TabsContent value="general" className="space-y-6">
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
-              Project
-            </CardTitle>
-            <CardDescription className="text-xs">
-              General project configuration.
-            </CardDescription>
-          </CardHeader>
-          <Separator />
-          <CardContent className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="project-name" className="text-xs">
-                Project Name
-              </Label>
-              <Input
-                id="project-name"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="project-domain" className="text-xs">
-                Domain
-              </Label>
-              <Input
-                id="project-domain"
-                placeholder="myapp.com"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                The domain where your chat widget will be installed.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving}
-            className="text-xs"
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      </TabsContent>
-
-      {/* Discord tab */}
-      <TabsContent value="discord" className="space-y-6">
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
-              Discord Connection
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Connect your Discord server to receive and reply to messages.
-            </CardDescription>
-          </CardHeader>
-          <Separator />
-          <CardContent className="space-y-4 pt-4">
-            {settings?.discord?.guildId ? (
-              <>
-                <div className="flex items-center gap-3 border border-border bg-accent/50 p-3">
-                  <div className="flex h-9 w-9 items-center justify-center bg-[#5865F2]">
-                    <svg
-                      className="h-4 w-4 text-[#fff]"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-medium text-foreground">
-                      {settings.discord.guildName}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Connected
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="gap-1 text-[10px]"
-                  >
-                    <Check className="h-2.5 w-2.5" />
-                    Connected
-                  </Badge>
-                </div>
-
-                {/* Channel selector */}
-                <div className="space-y-2">
-                  <Label className="text-xs">Chat Channel</Label>
-                  <p className="text-[10px] text-muted-foreground">
-                    New conversations will create threads in this channel.
-                  </p>
-                  <Select value={channelId} onValueChange={setChannelId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a channel..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {channels?.map(
-                        (ch: { id: string; name: string }) => (
-                          <SelectItem key={ch.id} value={ch.id}>
-                            <div className="flex items-center gap-2">
-                              <Hash className="h-3 w-3 text-muted-foreground" />
-                              {ch.name}
-                            </div>
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => {
-                    setShowGuildPicker(true)
-                    fetchGuilds()
-                  }}
-                >
-                  <ExternalLink className="mr-1.5 h-3 w-3" />
-                  Change Server
-                </Button>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  No Discord server connected yet. Follow these two steps:
-                </p>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-foreground text-[10px] font-bold text-background">
-                      1
-                    </span>
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-foreground">
-                        Add the bot to your server
-                      </p>
-                      <p className="mb-2 text-[10px] text-muted-foreground">
-                        This opens Discord in a new tab. Select the server
-                        you want to use.
-                      </p>
-                      <Button
-                        size="sm"
-                        onClick={handleOpenBotInvite}
-                        className="gap-1.5 text-xs"
-                      >
-                        <svg
-                          className="h-3.5 w-3.5"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                        </svg>
-                        Add Bot to Server
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-foreground text-[10px] font-bold text-background">
-                      2
-                    </span>
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-foreground">
-                        Select your server
-                      </p>
-                      <p className="mb-2 text-[10px] text-muted-foreground">
-                        {
-                          "After adding the bot, click below to pick which server to use."
-                        }
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setShowGuildPicker(true)
-                          fetchGuilds()
-                        }}
-                        className="gap-1.5 text-xs"
-                      >
-                        <RefreshCw className="h-3 w-3" />
-                        Load My Servers
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving}
-            className="text-xs"
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      </TabsContent>
-
-      {/* Widget tab */}
-      <TabsContent value="widget" className="space-y-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Widget settings */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
-                Appearance
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Customize how the chat widget looks on your website.
-              </CardDescription>
-            </CardHeader>
-            <Separator />
-            <CardContent className="space-y-5 pt-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Brand Color</Label>
-                <p className="text-[10px] text-muted-foreground">
-                  Pick a color that matches your brand. This is used for the
-                  chat button and message bubbles.
-                </p>
-                <ColorPicker
-                  value={primaryColor}
-                  onChange={setPrimaryColor}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs">Position</Label>
-                <Select value={position} onValueChange={setPosition}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bottom-right">Bottom Right</SelectItem>
-                    <SelectItem value="bottom-left">Bottom Left</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs">Bubble Shape</Label>
-                <p className="text-[10px] text-muted-foreground">
-                  Choose the style of message bubbles in the chat.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {BUBBLE_SHAPES.map((shape) => (
-                    <button
-                      key={shape.value}
-                      type="button"
-                      onClick={() => setBubbleShape(shape.value)}
-                      className={`flex flex-col items-center gap-1.5 border p-3 transition-all hover:bg-accent/50 ${
-                        bubbleShape === shape.value
-                          ? "border-foreground bg-accent/30"
-                          : "border-border"
-                      }`}
-                    >
-                      {/* Mini bubble preview */}
-                      <div className="flex w-full items-end justify-end">
-                        <div
-                          className="h-3 w-12"
-                          style={{
-                            backgroundColor: primaryColor,
-                            borderRadius: getPreviewRadius(shape.value, "visitor"),
-                          }}
-                        />
-                      </div>
-                      <div className="flex w-full items-start">
-                        <div
-                          className="h-3 w-10"
-                          style={{
-                            backgroundColor: `${primaryColor}20`,
-                            border: `1px solid ${primaryColor}30`,
-                            borderRadius: getPreviewRadius(shape.value, "agent"),
-                          }}
-                        />
-                      </div>
-                      <span className="text-[10px] font-medium text-foreground">
-                        {shape.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="welcome-msg" className="text-xs">
-                  Welcome Message
-                </Label>
-                <Textarea
-                  id="welcome-msg"
-                  value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
-                  rows={2}
-                  placeholder="Hi there! How can we help you today?"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="offline-msg" className="text-xs">
-                  Offline Message
-                </Label>
-                <Textarea
-                  id="offline-msg"
-                  value={offlineMessage}
-                  onChange={(e) => setOfflineMessage(e.target.value)}
-                  rows={2}
-                  placeholder="We're currently offline. Leave a message and we'll get back to you!"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Live preview */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
-                Preview
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Live preview of how your widget will look.
-              </CardDescription>
-            </CardHeader>
-            <Separator />
-            <CardContent className="pt-4">
-              <WidgetPreview
-                primaryColor={primaryColor}
-                welcomeMessage={welcomeMessage}
-                position={position}
-                bubbleShape={bubbleShape}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving}
-            className="text-xs"
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      </TabsContent>
-
-      {/* Guild picker dialog */}
-      <Dialog open={showGuildPicker} onOpenChange={setShowGuildPicker}>
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <DialogHeader className="space-y-1">
-              <DialogTitle className="text-sm font-semibold">
-                Select a Server
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                All servers you manage are shown below.
-              </DialogDescription>
-            </DialogHeader>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={fetchGuilds}
-              disabled={loadingGuilds}
-              className="h-8 w-8 p-0"
-              title="Refresh servers"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${loadingGuilds ? "animate-spin" : ""}`}
-              />
-              <span className="sr-only">Refresh servers</span>
-            </Button>
-          </div>
-
-          <div className="px-3 py-3">
-            {loadingGuilds ? (
-              <div className="space-y-2 px-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
-                    <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-3 w-28" />
-                      <Skeleton className="h-2 w-16" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : guilds.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <svg className="h-5 w-5 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                  </svg>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs font-medium text-foreground">
-                    No servers found
-                  </p>
-                  <p className="mt-1 max-w-[240px] text-[11px] leading-relaxed text-muted-foreground">
-                    You don&apos;t manage any Discord servers, or your session
-                    may have expired. Try logging out and back in.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handleOpenBotInvite}
-                  className="mt-1 gap-1.5 text-xs"
-                >
-                  Add Bot to Server
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : (
-              <div className="max-h-72 space-y-0.5 overflow-y-auto">
-                {guilds.map((guild) => {
-                  const isConnected = settings?.discord?.guildId === guild.id
-                  const hasBot = guild.hasBot !== false
-                  const iconUrl = guild.icon
-                    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${guild.icon.startsWith("a_") ? "gif" : "png"}?size=64`
-                    : null
-
-                  return (
-                    <div
-                      key={guild.id}
-                      className={`group flex w-full items-center gap-3 rounded-md px-3 py-2.5 transition-all ${
-                        isConnected
-                          ? "bg-accent/40"
-                          : hasBot
-                            ? "hover:bg-accent/60"
-                            : "opacity-70 hover:opacity-100"
-                      }`}
-                    >
-                      {/* Server icon */}
-                      <div className="relative shrink-0">
-                        {iconUrl ? (
-                          <img
-                            src={iconUrl}
-                            alt={guild.name}
-                            className={`h-10 w-10 rounded-full object-cover ${!hasBot ? "grayscale" : ""}`}
-                          />
-                        ) : (
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white ${
-                              hasBot ? "bg-[#5865F2]" : "bg-muted-foreground/40"
-                            }`}
-                          >
-                            {guild.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        {/* Small status dot */}
-                        {hasBot && (
-                          <span className="absolute -bottom-0.5 -right-0.5 block h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
-                        )}
-                      </div>
-
-                      {/* Server info */}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-foreground">
-                          {guild.name}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {isConnected
-                            ? "Currently connected"
-                            : hasBot
-                              ? "Bot installed"
-                              : "Bot not installed"}
-                        </p>
-                      </div>
-
-                      {/* Action area */}
-                      {isConnected ? (
-                        <Badge
-                          variant="secondary"
-                          className="shrink-0 gap-1 text-[9px]"
-                        >
-                          <Check className="h-2.5 w-2.5" />
-                          Active
-                        </Badge>
-                      ) : hasBot ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0 text-[10px] h-7 px-2.5 opacity-0 transition-opacity group-hover:opacity-100"
-                          onClick={() => handleSelectGuild(guild)}
-                          disabled={savingGuild}
-                        >
-                          Switch here
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 gap-1 text-[10px] h-7 px-2.5"
-                          onClick={handleOpenBotInvite}
-                        >
-                          Add Bot
-                          <ExternalLink className="h-2.5 w-2.5" />
-                        </Button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {guilds.length > 0 && (
-            <div className="border-t border-border px-5 py-3">
-              <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                  Bot installed
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" />
-                  Bot not installed
-                </span>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </Tabs>
+    <SettingsTabs
+      projectId={id}
+      project={{ name: project.name, domain: project.domain }}
+      widget={widgetData}
+      discord={discordData}
+      guilds={guilds}
+    />
   )
 }

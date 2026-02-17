@@ -62,7 +62,7 @@ export async function GET(
         encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
       )
 
-      // Poll Redis for new messages every 1.5 seconds
+      // Poll Redis for new messages every 800ms for near-real-time delivery
       const poll = async () => {
         while (alive) {
           try {
@@ -78,12 +78,13 @@ export async function GET(
             // Redis poll failed, keep going
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 1500))
+          await new Promise((resolve) => setTimeout(resolve, 800))
         }
       }
 
       poll()
 
+      // Send heartbeat every 20 seconds to keep the connection alive
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": heartbeat\n\n"))
@@ -91,7 +92,7 @@ export async function GET(
           alive = false
           clearInterval(heartbeat)
         }
-      }, 25000)
+      }, 20000)
 
       req.signal.addEventListener("abort", () => {
         alive = false

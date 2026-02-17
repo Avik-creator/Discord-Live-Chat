@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -14,8 +14,6 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import Link from "next/link"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 interface MessageData {
   id: string
   sender: string
@@ -28,60 +26,102 @@ export default function ConversationPage() {
     id: string
     conversationId: string
   }>()
-  const { data, isLoading, mutate } = useSWR(
-    `/api/projects/${id}/conversations/${conversationId}`,
-    fetcher
-  )
+  const queryClient = useQueryClient()
   const [reply, setReply] = useState("")
-  const [sending, setSending] = useState(false)
   const [sseMessages, setSseMessages] = useState<MessageData[]>([])
   const [animateIds, setAnimateIds] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sseRef = useRef<EventSource | null>(null)
 
-  // Set up SSE connection for live updates
+  const { data, isLoading } = useQuery({
+    queryKey: ["conversation", id, conversationId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/projects/${id}/conversations/${conversationId}`
+      )
+      if (!res.ok) throw new Error("Failed to fetch")
+      return res.json()
+    },
+  })
+
+  const sendMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(
+        `/api/projects/${id}/conversations/${conversationId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        }
+      )
+      if (!res.ok) throw new Error("Failed to send")
+      return res.json()
+    },
+    onSuccess: () => {
+      setReply("")
+      queryClient.invalidateQueries({
+        queryKey: ["conversation", id, conversationId],
+      })
+    },
+    onError: () => toast.error("Failed to send reply"),
+  })
+
+  // SSE with auto-reconnection
   useEffect(() => {
     if (!conversationId || !id) return
 
-    const eventSource = new EventSource(
-      `/api/projects/${id}/conversations/${conversationId}/stream`
-    )
-    sseRef.current = eventSource
+    let alive = true
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    eventSource.onmessage = (event) => {
-      try {
-        const eventData = JSON.parse(event.data)
-        if (eventData.type === "new_message" && eventData.message) {
-          setSseMessages((prev) => {
-            if (prev.some((m) => m.id === eventData.message.id)) return prev
-            return [...prev, eventData.message]
-          })
-          setAnimateIds((prev) => new Set(prev).add(eventData.message.id))
+    const connect = () => {
+      if (!alive) return
+      const eventSource = new EventSource(
+        `/api/projects/${id}/conversations/${conversationId}/stream`
+      )
+      sseRef.current = eventSource
+
+      eventSource.onmessage = (event) => {
+        try {
+          const eventData = JSON.parse(event.data)
+          if (eventData.type === "new_message" && eventData.message) {
+            setSseMessages((prev) => {
+              if (prev.some((m) => m.id === eventData.message.id)) return prev
+              return [...prev, eventData.message]
+            })
+            setAnimateIds((prev) => new Set(prev).add(eventData.message.id))
+          }
+        } catch {
+          // silent
         }
-      } catch {
-        // silent
+      }
+
+      eventSource.onerror = () => {
+        eventSource.close()
+        sseRef.current = null
+        if (alive) {
+          reconnectTimer = setTimeout(connect, 1000)
+        }
       }
     }
 
-    eventSource.onerror = () => {
-      // SSE disconnected
-      eventSource.close()
-      sseRef.current = null
-    }
+    connect()
 
-    // Polling fallback: refetch messages every 3s regardless of SSE
     const pollInterval = setInterval(() => {
-      mutate()
-    }, 3000)
+      queryClient.invalidateQueries({
+        queryKey: ["conversation", id, conversationId],
+      })
+    }, 4000)
 
     return () => {
-      eventSource.close()
+      alive = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      sseRef.current?.close()
       sseRef.current = null
       clearInterval(pollInterval)
     }
-  }, [conversationId, id, mutate])
+  }, [conversationId, id, queryClient])
 
-  // Merge SWR data with SSE messages
+  // Merge API data with SSE messages
   const baseMessages: MessageData[] = data?.messages ?? []
   const mergedMessages = [...baseMessages]
   for (const sseMsg of sseMessages) {
@@ -89,36 +129,18 @@ export default function ConversationPage() {
       mergedMessages.push(sseMsg)
     }
   }
-  // Sort by createdAt
   mergedMessages.sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    (a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   )
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [mergedMessages.length])
 
-  const handleSend = async () => {
-    if (!reply.trim() || sending) return
-    setSending(true)
-    try {
-      const res = await fetch(
-        `/api/projects/${id}/conversations/${conversationId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: reply.trim() }),
-        }
-      )
-      if (!res.ok) throw new Error()
-      setReply("")
-      await mutate()
-    } catch {
-      toast.error("Failed to send reply")
-    } finally {
-      setSending(false)
-    }
+  const handleSend = () => {
+    if (!reply.trim() || sendMutation.isPending) return
+    sendMutation.mutate(reply.trim())
   }
 
   if (isLoading) {
@@ -142,7 +164,6 @@ export default function ConversationPage() {
         Back to conversations
       </Link>
 
-      {/* Conversation header */}
       <div className="mb-4 flex items-center gap-3 border-b border-border pb-4">
         <div className="flex h-9 w-9 items-center justify-center bg-accent">
           <User className="h-4 w-4 text-muted-foreground" />
@@ -169,12 +190,14 @@ export default function ConversationPage() {
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 animate-pulse bg-emerald-500" style={{ borderRadius: "50%" }} />
+          <span
+            className="inline-block h-2 w-2 animate-pulse bg-emerald-500"
+            style={{ borderRadius: "50%" }}
+          />
           <span className="text-[10px] text-muted-foreground">Live</span>
         </div>
       </div>
 
-      {/* Messages */}
       <ScrollArea className="h-[55vh] border border-border bg-card p-4">
         <div className="space-y-3">
           {mergedMessages.map((msg) => {
@@ -236,7 +259,6 @@ export default function ConversationPage() {
         </div>
       </ScrollArea>
 
-      {/* Reply input */}
       <div className="mt-3 flex gap-2">
         <Input
           placeholder="Type a reply... (also sends to Discord)"
@@ -248,13 +270,13 @@ export default function ConversationPage() {
               handleSend()
             }
           }}
-          disabled={sending}
+          disabled={sendMutation.isPending}
           className="text-xs"
         />
         <Button
           size="icon"
           onClick={handleSend}
-          disabled={sending || !reply.trim()}
+          disabled={sendMutation.isPending || !reply.trim()}
           className="shrink-0"
         >
           <Send className="h-3.5 w-3.5" />
