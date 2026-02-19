@@ -76,6 +76,12 @@ export const widgetConfigs = pgTable("widget_configs", {
   welcomeMessage: text("welcome_message").notNull().default("Hi! How can we help?"),
   offlineMessage: text("offline_message").notNull().default("We'll get back to you soon."),
   bubbleShape: text("bubble_shape").notNull().default("rounded"),
+  // AI auto-reply settings
+  aiEnabled: boolean("ai_enabled").notNull().default(false),
+  aiSystemPrompt: text("ai_system_prompt").notNull().default(
+    "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
+  ),
+  aiModel: text("ai_model").notNull().default("openai/gpt-4o-mini"),
 })
 
 export const discordConfigs = pgTable("discord_configs", {
