@@ -22,25 +22,10 @@ export async function GET(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  let widget = null
-  try {
-    const [w] = await db.select().from(widgetConfigs).where(eq(widgetConfigs.projectId, id))
-    widget = w || null
-  } catch {
-    // bubble_shape column may not exist yet – fall back to selecting known columns
-    const [w] = await db
-      .select({
-        id: widgetConfigs.id,
-        projectId: widgetConfigs.projectId,
-        primaryColor: widgetConfigs.primaryColor,
-        position: widgetConfigs.position,
-        welcomeMessage: widgetConfigs.welcomeMessage,
-        offlineMessage: widgetConfigs.offlineMessage,
-      })
-      .from(widgetConfigs)
-      .where(eq(widgetConfigs.projectId, id))
-    widget = w ? { ...w, bubbleShape: "rounded" } : null
-  }
+  const [widget = null] = await db
+    .select()
+    .from(widgetConfigs)
+    .where(eq(widgetConfigs.projectId, id))
 
   const [discord] = await db
     .select()
@@ -88,15 +73,12 @@ export async function PUT(
     if (body.widget.welcomeMessage !== undefined) widgetUpdate.welcomeMessage = body.widget.welcomeMessage
     if (body.widget.offlineMessage !== undefined) widgetUpdate.offlineMessage = body.widget.offlineMessage
 
-    // First, try to save all fields including bubbleShape
     if (body.widget.bubbleShape) widgetUpdate.bubbleShape = body.widget.bubbleShape
-    try {
-      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
-    } catch {
-      // bubble_shape column may not exist yet – save without it
-      delete widgetUpdate.bubbleShape
-      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
-    }
+    if (body.widget.aiEnabled !== undefined) widgetUpdate.aiEnabled = body.widget.aiEnabled
+    if (body.widget.aiSystemPrompt !== undefined) widgetUpdate.aiSystemPrompt = body.widget.aiSystemPrompt
+    if (body.widget.aiModel) widgetUpdate.aiModel = body.widget.aiModel
+
+    await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
   }
 
   // Update discord channel selection

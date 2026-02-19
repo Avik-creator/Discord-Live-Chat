@@ -37,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
 import {
   Check,
   ExternalLink,
@@ -45,6 +46,8 @@ import {
   Paintbrush,
   MessageSquare,
   Send,
+  Bot,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -298,6 +301,11 @@ export default function SettingsPage() {
   const [welcomeMessage, setWelcomeMessage] = useState("")
   const [offlineMessage, setOfflineMessage] = useState("")
   const [bubbleShape, setBubbleShape] = useState("rounded")
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [aiSystemPrompt, setAiSystemPrompt] = useState(
+    "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
+  )
+  const [aiModel, setAiModel] = useState("openai/gpt-4o-mini")
   const [channelId, setChannelId] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -316,6 +324,12 @@ export default function SettingsPage() {
       setWelcomeMessage(settings.widget?.welcomeMessage || "")
       setOfflineMessage(settings.widget?.offlineMessage || "")
       setBubbleShape(settings.widget?.bubbleShape || "rounded")
+      setAiEnabled(settings.widget?.aiEnabled ?? false)
+      setAiSystemPrompt(
+        settings.widget?.aiSystemPrompt ||
+          "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
+      )
+      setAiModel(settings.widget?.aiModel || "openai/gpt-4o-mini")
       setChannelId(settings.discord?.channelId || "")
     }
   }, [settings])
@@ -384,7 +398,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           name: projectName,
           domain,
-          widget: { primaryColor, position, welcomeMessage, offlineMessage, bubbleShape },
+          widget: { primaryColor, position, welcomeMessage, offlineMessage, bubbleShape, aiEnabled, aiSystemPrompt, aiModel },
           discord: channelId
             ? { channelId, channelName: selectedChannel?.name }
             : undefined,
@@ -421,6 +435,9 @@ export default function SettingsPage() {
         </TabsTrigger>
         <TabsTrigger value="widget" className="text-xs">
           Widget
+        </TabsTrigger>
+        <TabsTrigger value="ai" className="text-xs">
+          AI Auto-Reply
         </TabsTrigger>
       </TabsList>
 
@@ -772,6 +789,162 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
+
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving}
+            className="text-xs"
+          >
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
+        </div>
+      </TabsContent>
+
+      {/* AI Auto-Reply tab */}
+      <TabsContent value="ai" className="space-y-6">
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center bg-foreground">
+                <Bot className="h-4 w-4 text-background" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
+                  AI Auto-Reply
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Automatically respond to visitors when no human agent is
+                  available.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="ai-toggle" className="text-xs text-muted-foreground">
+                  {aiEnabled ? "Enabled" : "Disabled"}
+                </Label>
+                <Switch
+                  id="ai-toggle"
+                  checked={aiEnabled}
+                  onCheckedChange={setAiEnabled}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <Separator />
+          <CardContent
+            className={`space-y-5 pt-5 transition-opacity ${
+              aiEnabled ? "opacity-100" : "pointer-events-none opacity-40"
+            }`}
+          >
+            {/* Model selection */}
+            <div className="space-y-2">
+              <Label htmlFor="ai-model" className="flex items-center gap-1.5 text-xs">
+                <Sparkles className="h-3 w-3" />
+                Model
+              </Label>
+              <Select value={aiModel} onValueChange={setAiModel}>
+                <SelectTrigger id="ai-model">
+                  <SelectValue placeholder="Select a model..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai/gpt-4o-mini">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">GPT-4o Mini</span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0"
+                      >
+                        Fast
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="openai/gpt-4o">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">GPT-4o</span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0"
+                      >
+                        Smart
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="anthropic/claude-sonnet-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Claude Sonnet 4</span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0"
+                      >
+                        Balanced
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="anthropic/claude-haiku-3.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Claude Haiku 3.5</span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0"
+                      >
+                        Fast
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Powered by Vercel AI Gateway. All models are available
+                out of the box.
+              </p>
+            </div>
+
+            {/* System prompt */}
+            <div className="space-y-2">
+              <Label htmlFor="ai-prompt" className="text-xs">
+                System Prompt
+              </Label>
+              <Textarea
+                id="ai-prompt"
+                value={aiSystemPrompt}
+                onChange={(e) => setAiSystemPrompt(e.target.value)}
+                rows={6}
+                className="text-xs leading-relaxed"
+                placeholder="Tell the AI how to behave..."
+              />
+              <p className="text-[10px] text-muted-foreground">
+                This instruction shapes how the AI replies. Include details
+                about your product, tone of voice, and any rules (e.g.
+                &quot;never discuss pricing&quot;).
+              </p>
+            </div>
+
+            {/* How it works */}
+            <div className="border border-border bg-muted/30 p-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                How it works
+              </p>
+              <ul className="space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                  When a visitor sends a message, the AI generates an instant
+                  reply using the conversation history.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                  The AI reply also appears in your Discord thread so agents
+                  can see what was said.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                  Human agents can jump in at any time by replying in
+                  the Discord thread, overriding the AI.
+                </li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex justify-end">
           <Button

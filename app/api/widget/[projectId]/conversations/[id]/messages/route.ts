@@ -14,6 +14,7 @@ import {
   getThreadMessages,
 } from "@/lib/discord"
 import { sseBus } from "@/lib/sse"
+import { generateAIReply } from "@/lib/ai-reply"
 
 function corsHeaders() {
   return {
@@ -213,6 +214,12 @@ export async function POST(
       createdAt: new Date().toISOString(),
     },
   })
+
+  // Fire-and-forget: generate AI auto-reply if enabled
+  // We don't await this so the visitor's message response is instant
+  generateAIReply(conversationId, projectId).catch((err) =>
+    console.error("[bridgecord] AI auto-reply error:", err)
+  )
 
   return NextResponse.json({ id: msgId }, { status: 201, headers: corsHeaders() })
 }
