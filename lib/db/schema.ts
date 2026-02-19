@@ -81,7 +81,7 @@ export const widgetConfigs = pgTable("widget_configs", {
   aiSystemPrompt: text("ai_system_prompt").notNull().default(
     "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
   ),
-  aiModel: text("ai_model").notNull().default("openai/gpt-4o-mini"),
+  aiModel: text("ai_model").notNull().default("llama-3.3-70b-versatile"),
 })
 
 export const discordConfigs = pgTable("discord_configs", {

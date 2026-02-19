@@ -305,7 +305,7 @@ export default function SettingsPage() {
   const [aiSystemPrompt, setAiSystemPrompt] = useState(
     "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
   )
-  const [aiModel, setAiModel] = useState("openai/gpt-4o-mini")
+  const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile")
   const [channelId, setChannelId] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -329,7 +329,7 @@ export default function SettingsPage() {
         settings.widget?.aiSystemPrompt ||
           "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
       )
-      setAiModel(settings.widget?.aiModel || "openai/gpt-4o-mini")
+      setAiModel(settings.widget?.aiModel || "llama-3.3-70b-versatile")
       setChannelId(settings.discord?.channelId || "")
     }
   }, [settings])
@@ -848,55 +848,54 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select a model..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="openai/gpt-4o-mini">
+                  <SelectItem value="llama-3.3-70b-versatile">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs">GPT-4o Mini</span>
+                      <span className="text-xs">Llama 3.3 70B</span>
                       <Badge
                         variant="secondary"
                         className="text-[9px] px-1.5 py-0"
                       >
-                        Fast
+                        Recommended
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="openai/gpt-4o">
+                  <SelectItem value="llama-3.1-8b-instant">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs">GPT-4o</span>
+                      <span className="text-xs">Llama 3.1 8B</span>
                       <Badge
                         variant="secondary"
                         className="text-[9px] px-1.5 py-0"
                       >
-                        Smart
+                        Fastest
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="anthropic/claude-sonnet-4">
+                  <SelectItem value="mixtral-8x7b-32768">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs">Claude Sonnet 4</span>
+                      <span className="text-xs">Mixtral 8x7B</span>
                       <Badge
                         variant="secondary"
                         className="text-[9px] px-1.5 py-0"
                       >
-                        Balanced
+                        32K context
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="anthropic/claude-haiku-3.5">
+                  <SelectItem value="gemma2-9b-it">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs">Claude Haiku 3.5</span>
+                      <span className="text-xs">Gemma 2 9B</span>
                       <Badge
                         variant="secondary"
                         className="text-[9px] px-1.5 py-0"
                       >
-                        Fast
+                        Compact
                       </Badge>
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground">
-                Powered by Vercel AI Gateway. All models are available
-                out of the box.
+                Powered by Groq for ultra-fast inference.
               </p>
             </div>
 

@@ -1,4 +1,9 @@
 import { generateText } from "ai"
+import { createGroq } from "@ai-sdk/groq"
+
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 import { db } from "@/lib/db"
 import {
   messages,
@@ -31,7 +36,7 @@ export async function generateAIReply(
   const systemPrompt =
     widget.aiSystemPrompt ||
     "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
-  const model = widget.aiModel || "openai/gpt-4o-mini"
+  const modelId = widget.aiModel || "llama-3.3-70b-versatile"
 
   // 2. Fetch conversation + history
   const [conversation] = await db
@@ -67,7 +72,7 @@ export async function generateAIReply(
   let aiText: string
   try {
     const result = await generateText({
-      model,
+      model: groq(modelId),
       system: systemPrompt,
       messages: modelMessages,
     })
