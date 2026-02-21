@@ -1,4 +1,5 @@
 import { generateText } from "ai"
+import { groq } from "@ai-sdk/groq"
 import { db } from "@/lib/db"
 import {
   messages,
@@ -32,9 +33,8 @@ export async function generateAIReply(
   const systemPrompt =
     widget.aiSystemPrompt ||
     "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
-  const rawModelId = widget.aiModel || "groq/llama-3.3-70b-versatile"
-  // Ensure model ID has the groq/ prefix for the Vercel AI Gateway
-  const modelId = rawModelId.startsWith("groq/") ? rawModelId : `groq/${rawModelId}`
+  const rawModelId = widget.aiModel || "llama-3.3-70b-versatile"
+  const modelId = rawModelId.startsWith("groq/") ? rawModelId.slice(5) : rawModelId
 
   // 2. Fetch conversation + history
   const [conversation] = await db
@@ -81,7 +81,7 @@ export async function generateAIReply(
   let aiText: string
   try {
     const result = await generateText({
-      model: modelId,
+      model: groq(modelId),
       system: fullSystemPrompt,
       messages: modelMessages,
     })

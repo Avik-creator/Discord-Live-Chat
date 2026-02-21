@@ -320,7 +320,7 @@ export default function SettingsPage() {
   const [aiSystemPrompt, setAiSystemPrompt] = useState(
     "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
   )
-  const [aiModel, setAiModel] = useState("groq/llama-3.3-70b-versatile")
+  const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile")
   const [crawling, setCrawling] = useState(false)
   const [channelId, setChannelId] = useState("")
   const [saving, setSaving] = useState(false)
@@ -345,7 +345,7 @@ export default function SettingsPage() {
         settings.widget?.aiSystemPrompt ||
           "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
       )
-      setAiModel(settings.widget?.aiModel || "groq/llama-3.3-70b-versatile")
+      setAiModel(settings.widget?.aiModel || "llama-3.3-70b-versatile")
       setChannelId(settings.discord?.channelId || "")
     }
   }, [settings])
@@ -893,7 +893,7 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select a model..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="groq/llama-3.3-70b-versatile">
+                  <SelectItem value="llama-3.3-70b-versatile">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Llama 3.3 70B</span>
                       <Badge
@@ -904,7 +904,7 @@ export default function SettingsPage() {
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="groq/llama-3.1-8b-instant">
+                  <SelectItem value="llama-3.1-8b-instant">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Llama 3.1 8B</span>
                       <Badge
@@ -915,7 +915,7 @@ export default function SettingsPage() {
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="groq/mixtral-8x7b-32768">
+                  <SelectItem value="mixtral-8x7b-32768">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Mixtral 8x7B</span>
                       <Badge
@@ -926,7 +926,7 @@ export default function SettingsPage() {
                       </Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="groq/gemma2-9b-it">
+                  <SelectItem value="gemma2-9b-it">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Gemma 2 9B</span>
                       <Badge
@@ -940,7 +940,7 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground">
-                Powered by Groq via Vercel AI Gateway.
+                Powered by Groq.
               </p>
             </div>
 
