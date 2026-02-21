@@ -1,17 +1,19 @@
 /**
  * Site crawler utility.
  *
- * Crawls a domain's pages, extracts clean text content, and caches it in
- * Upstash Redis so the AI auto-reply has real-time knowledge of the site.
+ * Crawls a domain's pages, extracts clean text content, chunks it, and caches
+ * in Upstash Redis (and optionally Upstash Vector for semantic retrieval).
+ * The AI receives only relevant chunks per query instead of the full dump.
  *
  * Flow:
  * 1. Try to find /sitemap.xml -- parse URLs from it.
  * 2. If no sitemap, fall back to crawling the homepage and extracting internal links.
- * 3. Fetch each page, strip HTML to plain text, truncate to keep within token limits.
- * 4. Store the aggregated context in Redis with a configurable TTL (default 1 hour).
+ * 3. Fetch each page, strip HTML to plain text, chunk with overlap.
+ * 4. Store chunks in Redis; if UPSTASH_VECTOR_* is set, upsert to Vector for semantic search.
  */
 
 import { Redis } from "@upstash/redis"
+import { chunkText, type SiteChunk } from "@/lib/chunks"
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -21,8 +23,8 @@ const redis = new Redis({
 const CACHE_PREFIX = "bridgecord:site:"
 const CACHE_TTL = 3600 // 1 hour
 const MAX_PAGES = 15 // Max pages to crawl
-const MAX_CHARS_PER_PAGE = 3000 // Truncate each page's text
-const MAX_TOTAL_CHARS = 30000 // Total context limit (~7500 tokens)
+const MAX_CHARS_PER_PAGE = 4000 // Per page before truncation (then chunked)
+const MAX_TOTAL_CHARS = 50000 // Total raw text across pages before we stop adding
 
 export interface CrawlResult {
   pages: { url: string; title: string; charCount: number }[]
@@ -189,21 +191,49 @@ export async function crawlSite(
     totalChars += result.charCount
   }
 
-  // 4. Build context string and cache in Redis
-  const contextParts = pages.map(
-    (p) => `--- Page: ${p.title} (${p.url}) ---\n${p.text}`
-  )
-  const contextString = contextParts.join("\n\n")
+  // 4. Chunk each page's text and collect all chunks
+  const allChunks: SiteChunk[] = []
+  for (const p of pages) {
+    const pageChunks = chunkText(p.text)
+    pageChunks.forEach((text, i) => {
+      const id = `${projectId}:${encodeURIComponent(p.url)}:${i}`
+      allChunks.push({
+        id,
+        text,
+        url: p.url,
+        title: p.title,
+      })
+    })
+  }
+
   const crawledAt = new Date().toISOString()
 
-  const cacheKey = `${CACHE_PREFIX}${projectId}`
-  await redis.set(
-    cacheKey,
-    JSON.stringify({ context: contextString, crawledAt }),
-    { ex: CACHE_TTL }
-  )
+  const chunksKey = `${CACHE_PREFIX}${projectId}:chunks`
+  await redis.set(chunksKey, JSON.stringify(allChunks), { ex: CACHE_TTL })
 
-  // Also store page metadata for the UI
+  if (
+    process.env.UPSTASH_VECTOR_REST_URL &&
+    process.env.UPSTASH_VECTOR_REST_TOKEN
+  ) {
+    try {
+      const { Index } = await import("@upstash/vector")
+      const index = new Index()
+      const namespace = `project_${projectId}`
+      for (const c of allChunks) {
+        await index.upsert(
+          {
+            id: c.id,
+            data: c.text,
+            metadata: { url: c.url, title: c.title },
+          },
+          { namespace } as { namespace: string }
+        )
+      }
+    } catch (err) {
+      console.error("[bridgecord] Vector upsert failed:", err)
+    }
+  }
+
   const metaKey = `${CACHE_PREFIX}${projectId}:meta`
   const meta: CrawlResult = {
     pages: pages.map((p) => ({ url: p.url, title: p.title, charCount: p.charCount })),
@@ -216,38 +246,38 @@ export async function crawlSite(
 }
 
 /**
- * Get the cached site context for a project.
- * If the cache has expired, triggers a background re-crawl automatically
- * using the project's domain so the AI always has fresh site knowledge.
- * Returns the context string or null if not cached and no domain is set.
+ * Get the cached site context for a project (legacy full-context form).
+ * Prefer getRelevantSiteContext(projectId, query) so the AI gets only relevant chunks.
+ * If the cache has expired, triggers a background re-crawl.
+ * Returns the context string or null if not cached.
  */
 export async function getSiteContext(
   projectId: string
 ): Promise<string | null> {
-  const cacheKey = `${CACHE_PREFIX}${projectId}`
-  const raw = await redis.get<string>(cacheKey)
-
+  const chunksKey = `${CACHE_PREFIX}${projectId}:chunks`
+  const raw = await redis.get<string>(chunksKey)
   if (raw) {
     try {
-      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
-      return (parsed as { context: string }).context || null
+      const chunks: SiteChunk[] =
+        typeof raw === "string" ? JSON.parse(raw) : (raw as SiteChunk[])
+      if (Array.isArray(chunks) && chunks.length > 0) {
+        const parts = chunks
+          .slice(0, 15)
+          .map((c) => `--- ${c.title} (${c.url}) ---\n${c.text}`)
+        return parts.join("\n\n")
+      }
     } catch {
-      return null
+      // fall through
     }
   }
 
-  // Cache expired or missing -- auto-recrawl in background if domain exists
-  // We use a lock key to prevent multiple simultaneous re-crawls
   const lockKey = `${CACHE_PREFIX}${projectId}:recrawl-lock`
   const locked = await redis.set(lockKey, "1", { ex: 120, nx: true })
-
   if (locked) {
-    // Fire-and-forget: recrawl in the background
     recrawlInBackground(projectId).catch((err) =>
       console.error("[bridgecord] Background recrawl failed:", err)
     )
   }
-
   return null
 }
 

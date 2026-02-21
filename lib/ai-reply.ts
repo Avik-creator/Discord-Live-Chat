@@ -10,7 +10,7 @@ import { eq, asc, and } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { sseBus } from "@/lib/sse"
 import { sendThreadMessage } from "@/lib/discord"
-import { getSiteContext } from "@/lib/crawler"
+import { getRelevantSiteContext } from "@/lib/chunks"
 
 /**
  * Generates an AI auto-reply for a visitor message in a conversation.
@@ -65,10 +65,16 @@ export async function generateAIReply(
     content: msg.content,
   }))
 
-  // 4. Fetch cached site context and prepend to system prompt
+  // 4. Fetch only chunks relevant to the last visitor message(s)
+  const query = modelMessages
+    .filter((m) => m.role === "user")
+    .slice(-2)
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .join(" ")
+    .trim() || "general support"
   let fullSystemPrompt = systemPrompt
   try {
-    const siteContext = await getSiteContext(projectId)
+    const siteContext = await getRelevantSiteContext(projectId, query)
     if (siteContext) {
       fullSystemPrompt = `${systemPrompt}\n\n--- WEBSITE KNOWLEDGE BASE ---\nBelow is real-time content crawled from the website. Use this to answer visitor questions accurately. Only reference information found here or in the conversation history.\n\n${siteContext}\n--- END KNOWLEDGE BASE ---`
     }

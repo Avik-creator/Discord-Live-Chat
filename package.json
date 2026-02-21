@@ -42,6 +42,7 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@tanstack/react-query": "^5.90.21",
     "@upstash/redis": "^1.36.2",
+    "@upstash/vector": "^1.2.2",
     "ai": "^6.0.97",
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
