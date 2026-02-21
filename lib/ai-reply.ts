@@ -98,16 +98,28 @@ export async function generateAIReply(
 
   if (!aiText || aiText.trim().length === 0) return null
 
-  const trimmed = aiText.trim()
+  // Strip <think>…</think> reasoning blocks the model may emit
+  const trimmed = aiText
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+
+  if (trimmed.length === 0) return null
+
   const msgId = nanoid(12)
   let discordMessageId: string | null = null
 
   // 6. Post AI reply to Discord thread so agents can see it
   if (conversation.discordThreadId) {
     try {
+      const discordPrefix = "🤖 **AI Auto-Reply:**\n"
+      const maxLen = 2000 - discordPrefix.length
+      const discordBody =
+        trimmed.length > maxLen
+          ? trimmed.slice(0, maxLen - 1) + "…"
+          : trimmed
       const result = await sendThreadMessage(
         conversation.discordThreadId,
-        `🤖 **AI Auto-Reply:**\n${trimmed}`,
+        `${discordPrefix}${discordBody}`,
         "AI Assistant"
       )
       discordMessageId = result.messageId

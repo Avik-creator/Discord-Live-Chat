@@ -92,15 +92,17 @@ export async function createThread(
   return { threadId: thread.id, messageId: msg.id }
 }
 
-/** Send a message in a thread */
+/** Send a message in a thread (auto-truncates to Discord's 2000-char limit) */
 export async function sendThreadMessage(
   threadId: string,
   content: string,
   username?: string
 ) {
-  const displayContent = username
-    ? `**${username}:** ${content}`
-    : `**Visitor:** ${content}`
+  const prefix = username ? `**${username}:** ` : `**Visitor:** `
+  const maxBody = 2000 - prefix.length
+  const body =
+    content.length > maxBody ? content.slice(0, maxBody - 1) + "…" : content
+  const displayContent = `${prefix}${body}`
 
   const res = await fetch(`${DISCORD_API}/channels/${threadId}/messages`, {
     method: "POST",
