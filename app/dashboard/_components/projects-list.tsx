@@ -36,6 +36,10 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Globe, MessageSquare, ArrowRight, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
+import {
+  createProjectSchema,
+  normalizeProjectDomain,
+} from "@/lib/validations/project"
 
 type Project = {
   id: string
@@ -54,6 +58,7 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [domain, setDomain] = useState("")
+  const [errors, setErrors] = useState<{ name?: string; domain?: string }>({})
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string
     name: string
@@ -70,16 +75,16 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
   })
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (payload: { name: string; domain: string }) => {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          domain: domain.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       })
-      if (!res.ok) throw new Error("Failed to create project")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error ?? "Failed to create project")
+      }
       return res.json()
     },
     onSuccess: (project) => {
@@ -87,11 +92,36 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
       setOpen(false)
       setName("")
       setDomain("")
+      setErrors({})
       toast.success("Project created")
       router.push(`/dashboard/projects/${project.id}`)
     },
-    onError: () => toast.error("Failed to create project"),
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to create project"),
   })
+
+  const handleCreateProject = () => {
+    setErrors({})
+    const parsed = createProjectSchema.safeParse({
+      name: name.trim(),
+      domain: normalizeProjectDomain(domain),
+    })
+    if (!parsed.success) {
+      const fieldErrors: { name?: string; domain?: string } = {}
+      for (const e of parsed.error.errors) {
+        const path = e.path[0] as "name" | "domain"
+        if (path && !fieldErrors[path]) fieldErrors[path] = e.message
+      }
+      setErrors(fieldErrors)
+      const first = parsed.error.errors[0]
+      if (first?.message) toast.error(first.message)
+      return
+    }
+    createMutation.mutate({
+      name: parsed.data.name,
+      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+    })
+  }
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -128,32 +158,46 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
             <DialogHeader>
               <DialogTitle>Create a new project</DialogTitle>
               <DialogDescription>
-                Give your project a name and optionally set the domain where the
-                widget will be installed.
+                Give your project a name and set the domain where the widget will
+                be installed.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-xs">
+                <Label htmlFor="list-name" className="text-xs">
                   Project Name
                 </Label>
                 <Input
-                  id="name"
+                  id="list-name"
                   placeholder="My SaaS App"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    if (errors.name) setErrors((p) => ({ ...p, name: undefined }))
+                  }}
+                  className={errors.name ? "border-destructive" : ""}
                 />
+                {errors.name && (
+                  <p className="text-[10px] text-destructive">{errors.name}</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="domain" className="text-xs">
-                  Domain (optional)
+                <Label htmlFor="list-domain" className="text-xs">
+                  Domain <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="domain"
+                  id="list-domain"
                   placeholder="myapp.com"
                   value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
+                  onChange={(e) => {
+                    setDomain(e.target.value)
+                    if (errors.domain) setErrors((p) => ({ ...p, domain: undefined }))
+                  }}
+                  className={errors.domain ? "border-destructive" : ""}
                 />
+                {errors.domain && (
+                  <p className="text-[10px] text-destructive">{errors.domain}</p>
+                )}
               </div>
             </div>
             <DialogFooter>
@@ -166,8 +210,8 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
               </Button>
               <Button
                 size="sm"
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || !name.trim()}
+                onClick={handleCreateProject}
+                disabled={createMutation.isPending}
               >
                 {createMutation.isPending ? "Creating..." : "Create Project"}
               </Button>

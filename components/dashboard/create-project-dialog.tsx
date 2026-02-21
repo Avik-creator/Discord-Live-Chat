@@ -14,6 +14,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus } from "lucide-react"
+import { toast } from "sonner"
+import {
+  createProjectSchema,
+  normalizeProjectDomain,
+} from "@/lib/validations/project"
 
 type CreateProjectDialogProps = {
   open: boolean
@@ -32,16 +37,36 @@ export function CreateProjectDialog({
 }: CreateProjectDialogProps) {
   const [name, setName] = useState("")
   const [domain, setDomain] = useState("")
+  const [errors, setErrors] = useState<{ name?: string; domain?: string }>({})
 
   const handleCreate = () => {
-    if (!name.trim() || !domain.trim()) return
-    onCreate({ name: name.trim(), domain: domain.trim() })
+    setErrors({})
+    const parsed = createProjectSchema.safeParse({
+      name: name.trim(),
+      domain: normalizeProjectDomain(domain),
+    })
+    if (!parsed.success) {
+      const fieldErrors: { name?: string; domain?: string } = {}
+      for (const e of parsed.error.errors) {
+        const path = e.path[0] as "name" | "domain"
+        if (path && !fieldErrors[path]) fieldErrors[path] = e.message
+      }
+      setErrors(fieldErrors)
+      const first = parsed.error.errors[0]
+      if (first?.message) toast.error(first.message)
+      return
+    }
+    onCreate({
+      name: parsed.data.name,
+      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+    })
   }
 
   useEffect(() => {
     if (!open) {
       setName("")
       setDomain("")
+      setErrors({})
     }
   }, [open])
 
@@ -76,8 +101,15 @@ export function CreateProjectDialog({
               id="name"
               placeholder="My SaaS App"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }))
+              }}
+              className={errors.name ? "border-destructive" : ""}
             />
+            {errors.name && (
+              <p className="text-[10px] text-destructive">{errors.name}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="domain" className="text-xs">
@@ -87,8 +119,15 @@ export function CreateProjectDialog({
               id="domain"
               placeholder="myapp.com"
               value={domain}
-              onChange={(e) => setDomain(e.target.value)}
+              onChange={(e) => {
+                setDomain(e.target.value)
+                if (errors.domain) setErrors((prev) => ({ ...prev, domain: undefined }))
+              }}
+              className={errors.domain ? "border-destructive" : ""}
             />
+            {errors.domain && (
+              <p className="text-[10px] text-destructive">{errors.domain}</p>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -98,7 +137,7 @@ export function CreateProjectDialog({
           <Button
             size="sm"
             onClick={handleCreate}
-            disabled={isPending || !name.trim() || !domain.trim()}
+            disabled={isPending}
           >
             {isPending ? "Creating..." : "Create Project"}
           </Button>
