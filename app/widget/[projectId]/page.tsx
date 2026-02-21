@@ -96,16 +96,31 @@ export default function WidgetPage() {
 
   const conversationId = conversationData?.conversationId ?? null
 
-  // Fetch initial messages then set up SSE
-  const fetchMessages = useCallback(async () => {
+  // Fetch messages from the server and merge with any pending optimistic messages
+  const fetchMessages = useCallback(async (isInitial = false) => {
     if (!conversationId) return
     try {
       const res = await fetch(
         `/api/widget/${projectId}/conversations/${conversationId}/messages`
       )
       if (res.ok) {
-        const data = await res.json()
-        setMessages(data)
+        const serverMsgs: Message[] = await res.json()
+        if (isInitial) {
+          setMessages(serverMsgs)
+          return
+        }
+        // Merge: keep optimistic (temp-) messages that the server hasn't confirmed yet
+        setMessages((prev) => {
+          const serverIds = new Set(serverMsgs.map((m) => m.id))
+          const pending = prev.filter(
+            (m) =>
+              m.id.startsWith("temp-") &&
+              !serverMsgs.some(
+                (s) => s.sender === m.sender && s.content === m.content
+              )
+          )
+          return [...serverMsgs, ...pending]
+        })
       }
     } catch {
       // silent
@@ -116,8 +131,8 @@ export default function WidgetPage() {
   useEffect(() => {
     if (!conversationId) return
 
-    // Load initial messages
-    fetchMessages()
+    // Load initial messages (full replace is safe here, no optimistic messages yet)
+    fetchMessages(true)
 
     let alive = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -244,8 +259,8 @@ export default function WidgetPage() {
 
       {/* Messages area */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
-        {/* Welcome message */}
-        {messages.length === 0 && config?.welcomeMessage && (
+        {/* Welcome message — always shown at top */}
+        {config?.welcomeMessage && (
           <div className="flex gap-2.5 animate-slide-in-bottom">
             <div
               className="flex h-7 w-7 shrink-0 items-center justify-center"
