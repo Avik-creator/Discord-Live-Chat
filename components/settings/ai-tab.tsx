@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Bot, Sparkles, Globe, Loader2, FileText } from "lucide-react"
 import type { CrawlMeta } from "@/hooks/use-settings"
-import { GROQ_MODELS } from "@/lib/groq-models"
+import { GROQ_MODELS, getValidGroqModelId } from "@/lib/groq-models"
 
 export function AITab({
   aiEnabled,
@@ -97,7 +97,10 @@ export function AITab({
               <Sparkles className="h-3 w-3" />
               Model
             </Label>
-            <Select value={aiModel} onValueChange={setAiModel}>
+            <Select
+              value={getValidGroqModelId(aiModel)}
+              onValueChange={setAiModel}
+            >
               <SelectTrigger id="ai-model">
                 <SelectValue placeholder="Select a model..." />
               </SelectTrigger>

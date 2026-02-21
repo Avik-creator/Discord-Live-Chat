@@ -33,3 +33,24 @@ export const GROQ_MODELS: GroqModelOption[] = [
 ]
 
 export const DEFAULT_GROQ_MODEL_ID = "llama-3.3-70b-versatile"
+
+const GROQ_MODEL_IDS = new Set(GROQ_MODELS.map((m) => m.id))
+
+/**
+ * Strip "groq/" prefix if present (legacy or API format).
+ */
+export function normalizeGroqModelId(id: string | undefined | null): string {
+  if (!id || typeof id !== "string") return DEFAULT_GROQ_MODEL_ID
+  const trimmed = id.trim()
+  if (!trimmed) return DEFAULT_GROQ_MODEL_ID
+  return trimmed.startsWith("groq/") ? trimmed.slice(5) : trimmed
+}
+
+/**
+ * Return a model id that is guaranteed to exist in GROQ_MODELS.
+ * Use for Select value so the dropdown always shows a valid selection.
+ */
+export function getValidGroqModelId(id: string | undefined | null): string {
+  const normalized = normalizeGroqModelId(id)
+  return GROQ_MODEL_IDS.has(normalized) ? normalized : DEFAULT_GROQ_MODEL_ID
+}
