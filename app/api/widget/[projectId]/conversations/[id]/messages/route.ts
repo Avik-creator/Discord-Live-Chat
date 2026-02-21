@@ -6,7 +6,7 @@ import {
   projects,
 } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 import { nanoid } from "nanoid"
 import {
   createThread,
@@ -215,11 +215,22 @@ export async function POST(
     },
   })
 
-  // Fire-and-forget: generate AI auto-reply if enabled
-  // We don't await this so the visitor's message response is instant
-  generateAIReply(conversationId, projectId).catch((err) =>
-    console.error("[bridgecord] AI auto-reply error:", err)
-  )
+  // Use after() to generate AI reply AFTER the response is sent
+  // This keeps the serverless function alive until the AI reply completes,
+  // unlike fire-and-forget which gets killed when the function terminates
+  after(async () => {
+    try {
+      console.log("[bridgecord] Starting AI auto-reply for conversation:", conversationId)
+      const aiMsgId = await generateAIReply(conversationId, projectId)
+      if (aiMsgId) {
+        console.log("[bridgecord] AI auto-reply sent:", aiMsgId)
+      } else {
+        console.log("[bridgecord] AI auto-reply skipped (disabled or empty)")
+      }
+    } catch (err) {
+      console.error("[bridgecord] AI auto-reply error:", err)
+    }
+  })
 
   return NextResponse.json({ id: msgId }, { status: 201, headers: corsHeaders() })
 }
