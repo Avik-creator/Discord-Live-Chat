@@ -26,19 +26,9 @@ export async function DELETE(
   const project = await requireProject(id, session.user.id)
   if (project instanceof NextResponse) return project
 
-  // Cascade delete: messages -> conversations -> widget_configs -> discord_configs -> project
-  const projectConversations = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(eq(conversations.projectId, id))
-
-  for (const conv of projectConversations) {
-    await db.delete(messages).where(eq(messages.conversationId, conv.id))
-  }
-
-  await db.delete(conversations).where(eq(conversations.projectId, id))
-  await db.delete(widgetConfigs).where(eq(widgetConfigs.projectId, id))
-  await db.delete(discordConfigs).where(eq(discordConfigs.projectId, id))
+  // FK constraints have ON DELETE CASCADE, so deleting the project
+  // automatically removes all related conversations, messages,
+  // widget_configs, and discord_configs.
   await db.delete(projects).where(eq(projects.id, id))
 
   return NextResponse.json({ success: true })

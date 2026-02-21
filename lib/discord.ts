@@ -7,6 +7,40 @@ function botHeaders() {
   }
 }
 
+/**
+ * Refresh a Discord OAuth access token using the refresh token.
+ * Returns the new access_token, refresh_token, and expires_in (seconds).
+ */
+export async function refreshDiscordToken(refreshToken: string): Promise<{
+  access_token: string
+  refresh_token: string
+  expires_in: number
+} | null> {
+  try {
+    const res = await fetch(`${DISCORD_API}/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: process.env.DISCORD_CLIENT_ID!,
+        client_secret: process.env.DISCORD_CLIENT_SECRET!,
+      }),
+    })
+
+    if (!res.ok) return null
+
+    const data = await res.json()
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_in: data.expires_in,
+    }
+  } catch {
+    return null
+  }
+}
+
 /** Create a public thread from a message in a channel */
 export async function createThread(
   channelId: string,
@@ -151,9 +185,11 @@ export async function getBotGuilds() {
 }
 
 /**
- * Get all guilds the user is in where they have MANAGE_GUILD permission.
+ * Get all guilds the user is in where they have MANAGE_GUILD or ADMINISTRATOR permission.
  * Uses the user's OAuth access token (not the bot token).
- * Discord permission bit for MANAGE_GUILD = 0x20
+ * Discord permission bits: ADMINISTRATOR = 0x8, MANAGE_GUILD = 0x20
+ *
+ * Throws if the token is invalid/expired so the caller can attempt a refresh.
  */
 export async function getUserGuilds(accessToken: string) {
   const res = await fetch(`${DISCORD_API}/users/@me/guilds`, {
@@ -163,16 +199,20 @@ export async function getUserGuilds(accessToken: string) {
   })
 
   if (!res.ok) {
-    return []
+    const status = res.status
+    throw new Error(`Discord API returned ${status}`)
   }
 
   const guilds = await res.json()
+  const ADMINISTRATOR = 0x8
   const MANAGE_GUILD = 0x20
 
   return guilds
     .filter(
       (g: { permissions: string; owner: boolean }) =>
-        g.owner || (parseInt(g.permissions) & MANAGE_GUILD) !== 0
+        g.owner ||
+        (parseInt(g.permissions) & ADMINISTRATOR) !== 0 ||
+        (parseInt(g.permissions) & MANAGE_GUILD) !== 0
     )
     .map(
       (g: {

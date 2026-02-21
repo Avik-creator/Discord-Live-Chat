@@ -112,54 +112,69 @@ export default function WidgetPage() {
     }
   }, [conversationId, projectId])
 
-  // Set up SSE connection
+  // Set up SSE connection with auto-reconnection
   useEffect(() => {
     if (!conversationId) return
 
     // Load initial messages
     fetchMessages()
 
-    // Connect to SSE stream
-    const eventSource = new EventSource(
-      `/api/widget/${projectId}/conversations/${conversationId}/stream`
-    )
-    sseRef.current = eventSource
+    let alive = true
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === "new_message" && data.message) {
-          setMessages((prev) => {
-            // Deduplicate: skip if message already exists or is a temp message replaced by real one
-            if (prev.some((m) => m.id === data.message.id)) return prev
-            // Remove the optimistic temp message if this is the real one from the same sender
-            const filtered = prev.filter(
-              (m) => !(m.id.startsWith("temp-") && m.sender === data.message.sender && m.content === data.message.content)
-            )
-            return [...filtered, data.message]
-          })
-          // Mark for animation
-          setAnimateIds((prev) => new Set(prev).add(data.message.id))
+    const connect = () => {
+      if (!alive) return
+      const eventSource = new EventSource(
+        `/api/widget/${projectId}/conversations/${conversationId}/stream`
+      )
+      sseRef.current = eventSource
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === "new_message" && data.message) {
+            setMessages((prev) => {
+              // Deduplicate: skip if message already exists
+              if (prev.some((m) => m.id === data.message.id)) return prev
+              // Remove the optimistic temp message if this is the real one
+              const filtered = prev.filter(
+                (m) =>
+                  !(
+                    m.id.startsWith("temp-") &&
+                    m.sender === data.message.sender &&
+                    m.content === data.message.content
+                  )
+              )
+              return [...filtered, data.message]
+            })
+            setAnimateIds((prev) => new Set(prev).add(data.message.id))
+          }
+        } catch {
+          // silent
         }
-      } catch {
-        // silent
+      }
+
+      eventSource.onerror = () => {
+        // SSE disconnected (e.g. Vercel 60s timeout) -- auto-reconnect
+        eventSource.close()
+        sseRef.current = null
+        if (alive) {
+          reconnectTimer = setTimeout(connect, 1000)
+        }
       }
     }
 
-    eventSource.onerror = () => {
-      // SSE disconnected -- start polling fallback
-      eventSource.close()
-      sseRef.current = null
-    }
+    connect()
 
-    // Polling fallback: fetch messages every 3s regardless of SSE
-    // This ensures messages always arrive even if SSE fails
+    // Polling fallback: fetch messages every 4s to catch anything SSE missed
     const pollInterval = setInterval(() => {
       fetchMessages()
-    }, 3000)
+    }, 4000)
 
     return () => {
-      eventSource.close()
+      alive = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      sseRef.current?.close()
       sseRef.current = null
       clearInterval(pollInterval)
     }
