@@ -124,16 +124,33 @@ export default function SettingsPage() {
       onSuccess: () => setShowGuildPicker(false),
     })
   }
+}
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-      </div>
-    )
+async function attemptRefresh(
+  discordAccount: {
+    id: string
+    refreshToken: string | null
   }
+): Promise<string | null> {
+  if (!discordAccount.refreshToken) return null
+
+  const refreshed = await refreshDiscordToken(discordAccount.refreshToken)
+  if (!refreshed) return null
+
+  await db
+    .update(account)
+    .set({
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token,
+      accessTokenExpiresAt: new Date(
+        Date.now() + refreshed.expires_in * 1000
+      ),
+      updatedAt: new Date(),
+    })
+    .where(eq(account.id, discordAccount.id))
+
+  return refreshed.access_token
+}
 
   return (
     <Tabs defaultValue="general" className="space-y-6">

@@ -1,13 +1,18 @@
 /**
  * Redis-backed pub/sub for real-time message delivery across serverless functions.
  *
- * - `publish(conversationId, data)` is called by the Discord webhook and widget
- *   message POST routes to push events into a Redis channel.
- * - `subscribe(conversationId, onMessage)` is called by SSE stream endpoints to
- *   listen for events. It polls a Redis list (BLPOP is not supported on Upstash
- *   REST API), so we use a lightweight polling approach against a Redis list.
+ * Uses Redis sorted sets (ZADD/ZRANGEBYSCORE) for reliable time-based message
+ * retrieval. This is more efficient than plain lists because:
+ * - Time-based queries are O(log N + M) instead of scanning all messages
+ * - No race conditions with cleanup (ZREMRANGEBYSCORE is atomic)
+ * - Messages are naturally ordered by timestamp
  *
- * The channel name is `chat:{conversationId}`.
+ * Flow:
+ * - `publishMessage(conversationId, data)` pushes an event into a Redis sorted set
+ *   keyed by `bridgecord:chat:{conversationId}`, with the current timestamp as score.
+ * - `pollMessages(conversationId, afterTimestamp)` retrieves all events with a score
+ *   greater than `afterTimestamp`.
+ * - Old entries are automatically pruned on each publish.
  */
 
 import { Redis } from "@upstash/redis"
@@ -18,66 +23,62 @@ const redis = new Redis({
 })
 
 const CHANNEL_PREFIX = "bridgecord:chat:"
-const MESSAGE_TTL = 60 // Seconds to keep messages in the list
+const MESSAGE_TTL = 120 // Seconds to keep messages (2 minutes)
 
 /**
  * Publish a message event to a conversation channel.
- * Pushes the event JSON into a Redis list and trims old entries.
+ * Uses a sorted set with timestamp as score for efficient time-based queries.
  */
 export async function publishMessage(
   conversationId: string,
   data: Record<string, unknown>
 ) {
   const key = `${CHANNEL_PREFIX}${conversationId}`
-  const payload = JSON.stringify({ ...data, _ts: Date.now() })
+  const ts = Date.now()
+  const payload = JSON.stringify({ ...data, _ts: ts })
 
-  await redis.rpush(key, payload)
-  // Auto-expire the key so it cleans up if conversation goes idle
+  // Add to sorted set with timestamp as score
+  await redis.zadd(key, { score: ts, member: payload })
+
+  // Trim messages older than TTL (best-effort cleanup)
+  const cutoff = ts - MESSAGE_TTL * 1000
+  await redis.zremrangebyscore(key, 0, cutoff)
+
+  // Set key expiry so idle conversations auto-cleanup
   await redis.expire(key, MESSAGE_TTL)
 }
 
 /**
  * Poll for new messages from a conversation channel.
- * Returns all messages pushed since `afterTimestamp`.
- * Cleans up consumed entries that are older than the TTL.
+ * Returns all messages with a timestamp greater than `afterTimestamp`.
+ * Uses ZRANGEBYSCORE for efficient range queries.
  */
 export async function pollMessages(
   conversationId: string,
   afterTimestamp: number
 ): Promise<Record<string, unknown>[]> {
   const key = `${CHANNEL_PREFIX}${conversationId}`
-  const raw = await redis.lrange(key, 0, -1)
+
+  // Fetch all messages with score > afterTimestamp
+  // Using (afterTimestamp means exclusive lower bound
+  const raw = await redis.zrangebyscore(key, afterTimestamp + 1, "+inf")
 
   const results: Record<string, unknown>[] = []
-  const toRemove: string[] = []
 
   for (const item of raw) {
     try {
-      const parsed = typeof item === "string" ? JSON.parse(item) : item
-      const ts = (parsed as { _ts?: number })._ts ?? 0
-
-      if (ts > afterTimestamp) {
-        results.push(parsed as Record<string, unknown>)
-      } else if (Date.now() - ts > MESSAGE_TTL * 1000) {
-        // Old message, mark for cleanup
-        toRemove.push(typeof item === "string" ? item : JSON.stringify(item))
-      }
+      const parsed =
+        typeof item === "string" ? JSON.parse(item) : (item as Record<string, unknown>)
+      results.push(parsed)
     } catch {
-      // skip malformed
-    }
-  }
-
-  // Clean up old entries (best-effort, non-blocking)
-  if (toRemove.length > 0) {
-    for (const entry of toRemove) {
-      redis.lrem(key, 1, entry).catch(() => {})
+      // skip malformed entries
     }
   }
 
   return results
 }
 
-// Re-export for backward compat -- the old sseBus.emit() calls now use publishMessage
+// Backward-compat alias for older code that calls sseBus.emit()
 export const sseBus = {
   emit: publishMessage,
 }

@@ -6,6 +6,7 @@ import { and, eq, asc } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { nanoid } from "nanoid"
 import { sendThreadMessage } from "@/lib/discord"
+import { sseBus } from "@/lib/sse"
 
 export async function GET(
   _req: Request,
@@ -74,6 +75,25 @@ export async function POST(
     sender: "agent",
     content: content.trim(),
     discordMessageId,
+  })
+
+  // Update conversation timestamp
+  await db
+    .update(conversations)
+    .set({ updatedAt: new Date(), status: "active" })
+    .where(eq(conversations.id, conversationId))
+
+  // Push SSE event so widget and other connected clients get real-time updates
+  await sseBus.emit(conversationId, {
+    type: "new_message",
+    message: {
+      id: msgId,
+      conversationId,
+      sender: "agent",
+      content: content.trim(),
+      discordMessageId,
+      createdAt: new Date().toISOString(),
+    },
   })
 
   return NextResponse.json({ id: msgId })
