@@ -1,5 +1,4 @@
 import { requireAuth, requireProject } from "@/lib/api/auth"
-import { db } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { getBotInviteUrl } from "@/lib/discord"
 
