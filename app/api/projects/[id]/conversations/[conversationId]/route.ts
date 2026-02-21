@@ -1,8 +1,8 @@
-import { auth } from "@/lib/auth"
+import { requireAuth, requireProject } from "@/lib/api/auth"
+import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
 import { projects, conversations, messages } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
-import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { nanoid } from "nanoid"
 import { sendThreadMessage } from "@/lib/discord"
@@ -11,24 +11,15 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; conversationId: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id, conversationId } = await params
-
-  // Verify project ownership
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
   const [conversation] = await db
     .select()
     .from(conversations)
     .where(and(eq(conversations.id, conversationId), eq(conversations.projectId, id)))
-
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const msgs = await db
@@ -45,31 +36,19 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; conversationId: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id, conversationId } = await params
-  const body = await req.json()
-  const { content } = body
-
-  if (!content?.trim()) {
-    return NextResponse.json({ error: "Content required" }, { status: 400 })
-  }
-
-  // Verify project ownership
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
   const [conversation] = await db
     .select()
     .from(conversations)
     .where(and(eq(conversations.id, conversationId), eq(conversations.projectId, id)))
-
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  const body = await req.json()
+  const { content } = body
+  if (!content?.trim()) return badRequest("Content required")
 
   // Save to DB
   const msgId = nanoid(12)

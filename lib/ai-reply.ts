@@ -5,7 +5,6 @@ import {
   messages,
   conversations,
   widgetConfigs,
-  discordConfigs,
 } from "@/lib/db/schema"
 import { eq, asc, and } from "drizzle-orm"
 import { nanoid } from "nanoid"

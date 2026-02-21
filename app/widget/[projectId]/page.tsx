@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Send, MessageSquare, User } from "lucide-react"
+import { WidgetHeader } from "@/components/widget/widget-header"
+import { WidgetInput } from "@/components/widget/widget-input"
 
 interface Message {
   id: string
@@ -218,42 +220,11 @@ export default function WidgetPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 animate-fade-in-down"
-        style={{
-          backgroundColor: primaryColor,
-          borderRadius: bubbleShape === "pill" ? "0 0 20px 20px" : undefined,
-        }}
-      >
-        <div
-          className="flex h-9 w-9 items-center justify-center"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.15)",
-            borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px",
-          }}
-        >
-          <MessageSquare className="h-4 w-4 text-[#fff]" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-[#fff]">
-            {config?.projectName || "Support"}
-          </p>
-          <p className="text-[11px] text-[rgba(255,255,255,0.75)]">
-            We typically reply in a few minutes
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-2 w-2 animate-pulse-soft"
-            style={{
-              backgroundColor: "#4ade80",
-              borderRadius: "50%",
-            }}
-          />
-          <span className="text-[10px] text-[rgba(255,255,255,0.7)]">Online</span>
-        </div>
-      </div>
+      <WidgetHeader
+        projectName={config?.projectName ?? "Support"}
+        primaryColor={primaryColor}
+        bubbleShape={bubbleShape}
+      />
 
       {/* Messages area */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
@@ -330,54 +301,14 @@ export default function WidgetPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div
-        className="border-t border-border bg-card/50 p-3 animate-fade-in-up backdrop-blur-sm"
-        style={{ animationDelay: "200ms" }}
-      >
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            disabled={sending}
-            className="flex-1 bg-background px-3.5 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200"
-            style={{
-              borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "24px" : "8px",
-              border: "1px solid var(--border)",
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={sending || !input.trim()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center text-[#fff] transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-40"
-            style={{
-              backgroundColor: primaryColor,
-              borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px",
-            }}
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mt-2 text-center text-[10px] text-muted-foreground">
-          Powered by{" "}
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-foreground hover:underline"
-          >
-            Bridgecord
-          </a>
-        </p>
-      </div>
+      <WidgetInput
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        disabled={sending}
+        primaryColor={primaryColor}
+        bubbleShape={bubbleShape}
+      />
     </div>
   )
 }

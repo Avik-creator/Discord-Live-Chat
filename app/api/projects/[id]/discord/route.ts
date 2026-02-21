@@ -1,8 +1,8 @@
-import { auth } from "@/lib/auth"
+import { requireAuth, requireProject } from "@/lib/api/auth"
+import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
 import { projects, discordConfigs } from "@/lib/db/schema"
-import { and, eq } from "drizzle-orm"
-import { headers } from "next/headers"
+import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { getBotInviteUrl } from "@/lib/discord"
 import { nanoid } from "nanoid"
@@ -12,18 +12,11 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id } = await params
-
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
   const url = getBotInviteUrl(id)
   return NextResponse.json({ url })
 }
@@ -33,22 +26,13 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id } = await params
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
   const { guildId, guildName } = await req.json()
-
-  if (!guildId || !guildName) {
-    return NextResponse.json({ error: "Missing guildId or guildName" }, { status: 400 })
-  }
-
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (!guildId || !guildName) return badRequest("Missing guildId or guildName")
 
   // Upsert discord config
   const existing = await db

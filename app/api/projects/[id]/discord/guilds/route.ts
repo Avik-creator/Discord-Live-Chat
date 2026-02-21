@@ -1,8 +1,7 @@
-import { auth } from "@/lib/auth"
+import { requireAuth, requireProject } from "@/lib/api/auth"
 import { db } from "@/lib/db"
 import { projects, account } from "@/lib/db/schema"
 import { and, eq } from "drizzle-orm"
-import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { getBotGuilds, getUserGuilds } from "@/lib/discord"
 
@@ -11,19 +10,11 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id } = await params
-
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project)
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
 
   // Get the user's Discord access token from the account table
   const [discordAccount] = await db

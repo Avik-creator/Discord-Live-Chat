@@ -1,14 +1,14 @@
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api/auth"
+import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
 import { projects, widgetConfigs } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import { headers } from "next/headers"
 import { nanoid } from "nanoid"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const userProjects = await db
     .select()
@@ -20,19 +20,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const body = await req.json()
   const { name, domain } = body
 
-  if (!name || typeof name !== "string") {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 })
-  }
-
-  if (!domain || typeof domain !== "string" || !domain.trim()) {
-    return NextResponse.json({ error: "Domain is required" }, { status: 400 })
-  }
+  if (!name || typeof name !== "string") return badRequest("Name is required")
+  if (!domain || typeof domain !== "string" || !domain.trim())
+    return badRequest("Domain is required")
 
   const projectId = nanoid(12)
   const widgetConfigId = nanoid(12)

@@ -1,18 +1,11 @@
+import { corsHeadersStream } from "@/lib/api/cors"
 import { db } from "@/lib/db"
 import { widgetConfigs, projects } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  }
-}
-
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() })
+  return new NextResponse(null, { status: 204, headers: corsHeadersStream() })
 }
 
 export async function GET(
@@ -29,7 +22,7 @@ export async function GET(
   if (!project) {
     return NextResponse.json(
       { error: "Project not found" },
-      { status: 404, headers: corsHeaders() }
+      { status: 404, headers: corsHeadersStream() }
     )
   }
 
@@ -60,6 +53,6 @@ export async function GET(
       offlineMessage: (widget?.offlineMessage as string) || "We'll get back to you soon.",
       bubbleShape: (widget?.bubbleShape as string) || "rounded",
     },
-    { headers: corsHeaders() }
+    { headers: corsHeadersStream() }
   )
 }
