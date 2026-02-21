@@ -36,10 +36,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Globe, MessageSquare, ArrowRight, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
-import {
-  createProjectSchema,
-  normalizeProjectDomain,
-} from "@/lib/validations/project"
+import { createProjectSchema } from "@/lib/validations/project"
 
 type Project = {
   id: string
@@ -104,7 +101,7 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
     setErrors({})
     const parsed = createProjectSchema.safeParse({
       name: name.trim(),
-      domain: normalizeProjectDomain(domain),
+      domain: domain.trim(),
     })
     if (!parsed.success) {
       const fieldErrors: { name?: string; domain?: string } = {}
@@ -119,7 +116,7 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
     }
     createMutation.mutate({
       name: parsed.data.name,
-      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+      domain: parsed.data.domain,
     })
   }
 

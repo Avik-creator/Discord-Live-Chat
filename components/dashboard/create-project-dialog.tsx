@@ -15,10 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
-import {
-  createProjectSchema,
-  normalizeProjectDomain,
-} from "@/lib/validations/project"
+import { createProjectSchema } from "@/lib/validations/project"
 
 type CreateProjectDialogProps = {
   open: boolean
@@ -43,7 +40,7 @@ export function CreateProjectDialog({
     setErrors({})
     const parsed = createProjectSchema.safeParse({
       name: name.trim(),
-      domain: normalizeProjectDomain(domain),
+      domain: domain.trim(),
     })
     if (!parsed.success) {
       const fieldErrors: { name?: string; domain?: string } = {}
@@ -58,7 +55,7 @@ export function CreateProjectDialog({
     }
     onCreate({
       name: parsed.data.name,
-      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+      domain: parsed.data.domain,
     })
   }
 

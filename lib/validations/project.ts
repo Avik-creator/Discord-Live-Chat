@@ -1,16 +1,26 @@
 import { z } from "zod"
 
-const domainRefine = (v: string) => {
-  if (!v || !v.trim()) return false
-  try {
-    new URL(v.startsWith("http") ? v : `https://${v}`)
-    return true
-  } catch {
-    return false
-  }
+/**
+ * Matches a valid domain like example.com, sub.example.co.uk, my-app.io
+ * - Each label: alphanumeric + hyphens, no leading/trailing hyphen, 1-63 chars
+ * - At least two labels (host + TLD)
+ * - TLD: letters only, 2-63 chars
+ */
+const DOMAIN_REGEX =
+  /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/
+
+/** Strip protocol, trailing slash, path, port — keep only the hostname. */
+function extractDomain(input: string): string {
+  let value = input.trim().toLowerCase()
+  // Remove protocol
+  value = value.replace(/^https?:\/\//, "")
+  // Remove port, path, query, fragment
+  value = value.split(/[/:?#]/)[0]
+  // Remove trailing dot (FQDN)
+  value = value.replace(/\.$/, "")
+  return value
 }
 
-/** Schema for creating a project (name + domain required). */
 export const createProjectSchema = z.object({
   name: z
     .string()
@@ -20,16 +30,10 @@ export const createProjectSchema = z.object({
     .string()
     .min(1, "Domain is required")
     .max(253, "Domain is too long")
-    .refine(domainRefine, {
+    .transform(extractDomain)
+    .refine((d) => DOMAIN_REGEX.test(d), {
       message: "Enter a valid domain (e.g. example.com)",
     }),
 })
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
-
-/** Normalize domain for validation (allow with or without protocol). */
-export function normalizeProjectDomain(domain: string): string {
-  const trimmed = domain.trim()
-  if (!trimmed) return trimmed
-  return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`
-}

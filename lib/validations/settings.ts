@@ -3,6 +3,18 @@ import { GROQ_MODELS } from "@/lib/groq-models"
 
 const groqModelIds = GROQ_MODELS.map((m) => m.id)
 
+const DOMAIN_REGEX =
+  /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/
+
+/** Strip protocol, port, path — keep only the hostname. */
+function extractDomain(input: string): string {
+  let value = input.trim().toLowerCase()
+  value = value.replace(/^https?:\/\//, "")
+  value = value.split(/[/:?#]/)[0]
+  value = value.replace(/\.$/, "")
+  return value
+}
+
 export const settingsFormSchema = z.object({
   name: z
     .string()
@@ -12,18 +24,10 @@ export const settingsFormSchema = z.object({
     .string()
     .min(1, "Domain is required")
     .max(253, "Domain is too long")
-    .refine(
-      (v) => {
-        if (!v) return false
-        try {
-          new URL(v.startsWith("http") ? v : `https://${v}`)
-          return true
-        } catch {
-          return false
-        }
-      },
-      { message: "Enter a valid domain (e.g. example.com)" }
-    ),
+    .transform(extractDomain)
+    .refine((d) => DOMAIN_REGEX.test(d), {
+      message: "Enter a valid domain (e.g. example.com)",
+    }),
   widget: z.object({
     primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid hex color"),
     position: z.enum(["bottom-left", "bottom-right", "top-left", "top-right"]),
@@ -45,10 +49,3 @@ export const settingsFormSchema = z.object({
 })
 
 export type SettingsFormValues = z.infer<typeof settingsFormSchema>
-
-/** Normalize domain for validation (allow with or without protocol) */
-export function normalizeDomainForValidation(domain: string): string {
-  const trimmed = domain.trim()
-  if (!trimmed) return trimmed
-  return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`
-}

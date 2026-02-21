@@ -18,10 +18,7 @@ import { DiscordTab } from "@/components/settings/discord-tab"
 import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
 import { useSettingsStore } from "@/stores/settings-store"
-import {
-  settingsFormSchema,
-  normalizeDomainForValidation,
-} from "@/lib/validations/settings"
+import { settingsFormSchema } from "@/lib/validations/settings"
 
 function SettingsLoadingSkeleton() {
   return (
@@ -119,10 +116,7 @@ export default function SettingsPage() {
       }),
     }
 
-    const parsed = settingsFormSchema.safeParse({
-      ...rawPayload,
-      domain: normalizeDomainForValidation(rawPayload.domain),
-    })
+    const parsed = settingsFormSchema.safeParse(rawPayload)
 
     if (!parsed.success) {
       const firstError = parsed.error.errors[0]
@@ -134,7 +128,7 @@ export default function SettingsPage() {
 
     const payload: SaveSettingsPayload = {
       name: parsed.data.name,
-      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+      domain: parsed.data.domain,
       widget: parsed.data.widget,
       ...(parsed.data.discord?.channelId && {
         discord: {
@@ -150,8 +144,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/projects/${id}/discord`)
       const data = await res.json()
-      window.open(data.url, "_blank", "noopener,noreferrer")
-      toast.info("After adding the bot, you’ll be redirected back here and the server will be connected.")
+      window.location.href = data.url
     } catch {
       toast.error("Failed to generate Discord invite link")
     }

@@ -2,10 +2,7 @@ import { requireAuth } from "@/lib/api/auth"
 import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
 import { projects, widgetConfigs } from "@/lib/db/schema"
-import {
-  createProjectSchema,
-  normalizeProjectDomain,
-} from "@/lib/validations/project"
+import { createProjectSchema } from "@/lib/validations/project"
 import { eq } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { NextResponse } from "next/server"
@@ -40,7 +37,7 @@ export async function POST(req: Request) {
     typeof raw.domain === "string" ? raw.domain.trim() : ""
   const parsed = createProjectSchema.safeParse({
     name,
-    domain: domainInput ? normalizeProjectDomain(domainInput) : "",
+    domain: domainInput,
   })
 
   if (!parsed.success) {
@@ -48,7 +45,7 @@ export async function POST(req: Request) {
     return badRequest(first?.message ?? "Invalid request")
   }
 
-  const domain = parsed.data.domain.replace(/^https?:\/\//i, "").trim()
+  const domain = parsed.data.domain
   const projectId = nanoid(12)
   const widgetConfigId = nanoid(12)
 
