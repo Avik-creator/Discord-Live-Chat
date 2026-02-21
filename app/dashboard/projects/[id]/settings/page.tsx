@@ -20,6 +20,7 @@ import { DiscordTab } from "@/components/settings/discord-tab"
 import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
 import { GuildPickerDialog } from "@/components/settings/guild-picker-dialog"
+import { DEFAULT_GROQ_MODEL_ID } from "@/lib/groq-models"
 
 const DEFAULT_AI_PROMPT =
   "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
@@ -48,7 +49,7 @@ export default function SettingsPage() {
   const [bubbleShape, setBubbleShape] = useState("rounded")
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiSystemPrompt, setAiSystemPrompt] = useState(DEFAULT_AI_PROMPT)
-  const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile")
+  const [aiModel, setAiModel] = useState(DEFAULT_GROQ_MODEL_ID)
   const [channelId, setChannelId] = useState("")
   const [showGuildPicker, setShowGuildPicker] = useState(false)
 
@@ -63,7 +64,7 @@ export default function SettingsPage() {
       setBubbleShape(settings.widget?.bubbleShape || "rounded")
       setAiEnabled(settings.widget?.aiEnabled ?? false)
       setAiSystemPrompt(settings.widget?.aiSystemPrompt || DEFAULT_AI_PROMPT)
-      setAiModel(settings.widget?.aiModel || "llama-3.3-70b-versatile")
+      setAiModel(settings.widget?.aiModel || DEFAULT_GROQ_MODEL_ID)
       setChannelId(settings.discord?.channelId || "")
     }
   }, [settings])

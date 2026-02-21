@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { User, Headphones } from "lucide-react"
 import type { MessageData } from "@/hooks/use-conversations"
+import { MarkdownContent } from "@/components/ui/markdown-content"
 
 type MessageBubbleProps = {
   message: MessageData
@@ -45,7 +46,11 @@ export function MessageBubble({
             : "bg-accent text-foreground"
         )}
       >
-        <p className="text-xs">{message.content}</p>
+        {message.sender === "agent" ? (
+          <MarkdownContent content={message.content} className="text-xs" />
+        ) : (
+          <p className="text-xs whitespace-pre-wrap">{message.content}</p>
+        )}
         <p
           className={cn(
             "mt-1 text-[10px]",

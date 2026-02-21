@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Bot, Sparkles, Globe, Loader2, FileText } from "lucide-react"
 import type { CrawlMeta } from "@/hooks/use-settings"
+import { GROQ_MODELS } from "@/lib/groq-models"
 
 export function AITab({
   aiEnabled,
@@ -101,38 +102,18 @@ export function AITab({
                 <SelectValue placeholder="Select a model..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="llama-3.3-70b-versatile">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs">Llama 3.3 70B</span>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
-                      Recommended
-                    </Badge>
-                  </div>
-                </SelectItem>
-                <SelectItem value="llama-3.1-8b-instant">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs">Llama 3.1 8B</span>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
-                      Fastest
-                    </Badge>
-                  </div>
-                </SelectItem>
-                <SelectItem value="mixtral-8x7b-32768">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs">Mixtral 8x7B</span>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
-                      32K context
-                    </Badge>
-                  </div>
-                </SelectItem>
-                <SelectItem value="gemma2-9b-it">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs">Gemma 2 9B</span>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
-                      Compact
-                    </Badge>
-                  </div>
-                </SelectItem>
+                {GROQ_MODELS.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">{model.label}</span>
+                      {model.badge && (
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                          {model.badge}
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-[10px] text-muted-foreground">

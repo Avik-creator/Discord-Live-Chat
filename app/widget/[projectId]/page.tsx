@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Send, MessageSquare, User } from "lucide-react"
 import { WidgetHeader } from "@/components/widget/widget-header"
 import { WidgetInput } from "@/components/widget/widget-input"
+import { MarkdownContent } from "@/components/ui/markdown-content"
 
 interface Message {
   id: string
@@ -291,9 +292,16 @@ export default function WidgetPage() {
                   border: isVisitor ? "none" : `1px solid ${hexToLightBg(primaryColor, 0.15)}`,
                 }}
               >
-                <p className={`whitespace-pre-wrap text-[13px] leading-relaxed ${!isVisitor ? "text-foreground" : ""}`}>
-                  {msg.content}
-                </p>
+                {isVisitor ? (
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+                    {msg.content}
+                  </p>
+                ) : (
+                  <MarkdownContent
+                    content={msg.content}
+                    className={!isVisitor ? "text-foreground" : ""}
+                  />
+                )}
               </div>
             </div>
           )
