@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -14,8 +14,6 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import Link from "next/link"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 interface MessageData {
   id: string
   sender: string
@@ -28,10 +26,14 @@ export default function ConversationPage() {
     id: string
     conversationId: string
   }>()
-  const { data, isLoading, mutate } = useSWR(
-    `/api/projects/${id}/conversations/${conversationId}`,
-    fetcher
-  )
+  const queryClient = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ["conversation", id, conversationId],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/conversations/${conversationId}`).then((r) =>
+        r.json()
+      ),
+  })
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
   const [sseMessages, setSseMessages] = useState<MessageData[]>([])
@@ -71,7 +73,9 @@ export default function ConversationPage() {
 
     // Polling fallback: refetch messages every 3s regardless of SSE
     const pollInterval = setInterval(() => {
-      mutate()
+      queryClient.invalidateQueries({
+        queryKey: ["conversation", id, conversationId],
+      })
     }, 3000)
 
     return () => {
@@ -79,7 +83,7 @@ export default function ConversationPage() {
       sseRef.current = null
       clearInterval(pollInterval)
     }
-  }, [conversationId, id, mutate])
+  }, [conversationId, id, queryClient])
 
   // Merge SWR data with SSE messages
   const baseMessages: MessageData[] = data?.messages ?? []
@@ -113,7 +117,9 @@ export default function ConversationPage() {
       )
       if (!res.ok) throw new Error()
       setReply("")
-      await mutate()
+      await queryClient.invalidateQueries({
+        queryKey: ["conversation", id, conversationId],
+      })
     } catch {
       toast.error("Failed to send reply")
     } finally {

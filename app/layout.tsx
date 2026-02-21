@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist_Mono } from 'next/font/google'
 import { Toaster } from 'sonner'
+import { QueryProvider } from '@/components/query-provider'
 
 import './globals.css'
 
@@ -80,8 +81,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistMono.variable} font-sans antialiased`}>
-        {children}
-        <Toaster richColors position="top-right" />
+        <QueryProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </QueryProvider>
       </body>
     </html>
   )

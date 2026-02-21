@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -53,8 +53,6 @@ import {
   FileText,
 } from "lucide-react"
 import { toast } from "sonner"
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 type Guild = {
   id: string
@@ -285,17 +283,31 @@ function WidgetPreview({
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>()
-  const {
-    data: settings,
-    isLoading,
-    mutate,
-  } = useSWR(`/api/projects/${id}/settings`, fetcher)
-  const { data: channels } = useSWR(
-    settings?.discord?.guildId
-      ? `/api/projects/${id}/discord/channels`
-      : null,
-    fetcher
-  )
+  const queryClient = useQueryClient()
+
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["settings", id],
+    queryFn: () => fetch(`/api/projects/${id}/settings`).then((r) => r.json()),
+    enabled: !!id,
+  })
+
+  const { data: channels } = useQuery({
+    queryKey: ["channels", id, settings?.discord?.guildId],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/discord/channels`).then((r) => r.json()),
+    enabled: !!settings?.discord?.guildId,
+  })
+
+  const { data: crawlMeta } = useQuery<{
+    pages: { url: string; title: string; charCount: number }[]
+    totalChars: number
+    crawledAt: string | null
+  }>({
+    queryKey: ["crawl", id],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/crawl`).then((r) => r.json()),
+    enabled: !!id,
+  })
 
   const [projectName, setProjectName] = useState("")
   const [domain, setDomain] = useState("")
@@ -310,11 +322,6 @@ export default function SettingsPage() {
   )
   const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile")
   const [crawling, setCrawling] = useState(false)
-  const [crawlMeta, setCrawlMeta] = useState<{
-    pages: { url: string; title: string; charCount: number }[]
-    totalChars: number
-    crawledAt: string | null
-  } | null>(null)
   const [channelId, setChannelId] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -343,16 +350,6 @@ export default function SettingsPage() {
     }
   }, [settings])
 
-  // Fetch crawl metadata on mount
-  useEffect(() => {
-    if (id) {
-      fetch(`/api/projects/${id}/crawl`)
-        .then((r) => r.json())
-        .then((data) => setCrawlMeta(data))
-        .catch(() => {})
-    }
-  }, [id])
-
   const handleCrawlSite = async () => {
     setCrawling(true)
     try {
@@ -363,7 +360,7 @@ export default function SettingsPage() {
         return
       }
       const result = await res.json()
-      setCrawlMeta(result)
+      await queryClient.invalidateQueries({ queryKey: ["crawl", id] })
       toast.success(`Crawled ${result.pages.length} page(s) successfully`)
     } catch {
       toast.error("Failed to crawl site")
@@ -414,7 +411,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ guildId: guild.id, guildName: guild.name }),
       })
       if (!res.ok) throw new Error()
-      await mutate()
+      await queryClient.invalidateQueries({ queryKey: ["settings", id] })
       setShowGuildPicker(false)
       toast.success(`Connected to ${guild.name}!`)
     } catch {
@@ -447,7 +444,7 @@ export default function SettingsPage() {
         }),
       })
       if (!res.ok) throw new Error()
-      await mutate()
+      await queryClient.invalidateQueries({ queryKey: ["settings", id] })
       toast.success("Settings saved")
     } catch {
       toast.error("Failed to save settings")

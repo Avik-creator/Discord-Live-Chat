@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import { useQuery } from "@tanstack/react-query"
 import { useParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,16 +8,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { MessageSquare, User, ArrowRight } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 export default function ProjectInboxPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { data: convos, isLoading } = useSWR(
-    `/api/projects/${id}/conversations`,
-    fetcher,
-    { refreshInterval: 5000 }
-  )
+  const { data: convos, isLoading } = useQuery({
+    queryKey: ["conversations", id],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/conversations`).then((r) => r.json()),
+    refetchInterval: 5000,
+  })
 
   if (isLoading) {
     return (

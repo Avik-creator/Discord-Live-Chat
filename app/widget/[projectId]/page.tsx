@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Send, MessageSquare, User } from "lucide-react"
 
 interface Message {
@@ -57,56 +58,40 @@ function hexToLightBg(hex: string, opacity: number = 0.12): string {
 
 export default function WidgetPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [config, setConfig] = useState<WidgetConfig | null>(null)
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [conversationId, setConversationId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const visitorIdRef = useRef<string>("")
+  const visitorIdRef = useRef<string>(
+    typeof window !== "undefined" ? getVisitorId() : ""
+  )
   const sseRef = useRef<EventSource | null>(null)
   const [animateIds, setAnimateIds] = useState<Set<string>>(new Set())
 
-  // Load config
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const res = await fetch(`/api/widget/${projectId}/config`)
-        if (res.ok) {
-          const data = await res.json()
-          setConfig(data)
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadConfig()
-    visitorIdRef.current = getVisitorId()
-  }, [projectId])
+  // Load config via TanStack Query
+  const { data: config, isLoading: loading } = useQuery<WidgetConfig>({
+    queryKey: ["widget-config", projectId],
+    queryFn: () =>
+      fetch(`/api/widget/${projectId}/config`).then((r) => r.json()),
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  })
 
-  // Initialize or resume conversation
-  useEffect(() => {
-    if (!config) return
-    const initConversation = async () => {
-      try {
-        const res = await fetch(`/api/widget/${projectId}/conversations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ visitorId: visitorIdRef.current }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setConversationId(data.conversationId)
-        }
-      } catch {
-        // silent
-      }
-    }
-    initConversation()
-  }, [config, projectId])
+  // Initialize or resume conversation via TanStack Query
+  const { data: conversationData } = useQuery({
+    queryKey: ["widget-conversation", projectId, visitorIdRef.current],
+    queryFn: () =>
+      fetch(`/api/widget/${projectId}/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId: visitorIdRef.current }),
+      }).then((r) => r.json()),
+    enabled: !!config && !!visitorIdRef.current,
+    staleTime: Infinity,
+  })
+
+  const conversationId = conversationData?.conversationId ?? null
 
   // Fetch initial messages then set up SSE
   const fetchMessages = useCallback(async () => {

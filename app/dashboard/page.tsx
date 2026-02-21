@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -37,10 +37,12 @@ import { Plus, Globe, MessageSquare, ArrowRight, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 export default function DashboardPage() {
-  const { data: projects, isLoading, mutate } = useSWR("/api/projects", fetcher)
+  const queryClient = useQueryClient()
+  const { data: projects, isLoading } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => fetch("/api/projects").then((r) => r.json()),
+  })
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [domain, setDomain] = useState("")
@@ -66,7 +68,7 @@ export default function DashboardPage() {
       })
       if (!res.ok) throw new Error("Failed to create project")
       const project = await res.json()
-      await mutate()
+      await queryClient.invalidateQueries({ queryKey: ["projects"] })
       setOpen(false)
       setName("")
       setDomain("")
@@ -87,7 +89,7 @@ export default function DashboardPage() {
         method: "DELETE",
       })
       if (!res.ok) throw new Error()
-      await mutate()
+      await queryClient.invalidateQueries({ queryKey: ["projects"] })
       toast.success("Project deleted")
     } catch {
       toast.error("Failed to delete project")
