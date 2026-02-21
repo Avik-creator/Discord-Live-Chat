@@ -1,28 +1,10 @@
 import { requireAuth, requireProject } from "@/lib/api/auth"
-import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
-import { projects, discordConfigs } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { getBotInviteUrl } from "@/lib/discord"
-import { nanoid } from "nanoid"
 
-/** GET: Generate the Discord bot invite URL */
+/** GET: Generate the Discord bot invite URL (with redirect so we auto-save the server) */
 export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await requireAuth()
-  if (session instanceof NextResponse) return session
-  const { id } = await params
-  const project = await requireProject(id, session.user.id)
-  if (project instanceof NextResponse) return project
-  const url = getBotInviteUrl(id)
-  return NextResponse.json({ url })
-}
-
-/** POST: Save selected guild to project */
-export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -31,28 +13,10 @@ export async function POST(
   const { id } = await params
   const project = await requireProject(id, session.user.id)
   if (project instanceof NextResponse) return project
-  const { guildId, guildName } = await req.json()
-  if (!guildId || !guildName) return badRequest("Missing guildId or guildName")
-
-  // Upsert discord config
-  const existing = await db
-    .select()
-    .from(discordConfigs)
-    .where(eq(discordConfigs.projectId, id))
-
-  if (existing.length > 0) {
-    await db
-      .update(discordConfigs)
-      .set({ guildId, guildName })
-      .where(eq(discordConfigs.projectId, id))
-  } else {
-    await db.insert(discordConfigs).values({
-      id: nanoid(12),
-      projectId: id,
-      guildId,
-      guildName,
-    })
-  }
-
-  return NextResponse.json({ ok: true })
+  const origin = req.headers.get("x-forwarded-host")
+    ? `${req.headers.get("x-forwarded-proto") ?? "https"}://${req.headers.get("x-forwarded-host")}`
+    : new URL(req.url).origin
+  const redirectUri = `${origin}/api/discord/callback`
+  const url = getBotInviteUrl(id, redirectUri, id)
+  return NextResponse.json({ url })
 }

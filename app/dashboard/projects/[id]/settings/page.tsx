@@ -1,7 +1,7 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
-import { useParams } from "next/navigation"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useParams, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -11,15 +11,12 @@ import {
   useSaveSettings,
   useCrawlMeta,
   useCrawlSite,
-  useDiscordGuilds,
-  useSelectGuild,
   type SaveSettingsPayload,
 } from "@/hooks/use-settings"
 import { GeneralTab } from "@/components/settings/general-tab"
 import { DiscordTab } from "@/components/settings/discord-tab"
 import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
-import { GuildPickerDialog } from "@/components/settings/guild-picker-dialog"
 import { useSettingsStore } from "@/stores/settings-store"
 import {
   settingsFormSchema,
@@ -46,8 +43,17 @@ function SettingsLoadingSkeleton() {
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
   const { data: settings, isLoading: settingsLoading } = useProjectSettings(id)
   const saveSettings = useSaveSettings(id)
+
+  useEffect(() => {
+    if (searchParams.get("discord") === "connected" && id) {
+      queryClient.invalidateQueries({ queryKey: ["settings", id] })
+      toast.success("Discord server connected!")
+    }
+  }, [searchParams, id, queryClient])
   const { data: channels } = useQuery({
     queryKey: ["channels", id, settings?.discord?.guildId],
     queryFn: () =>
@@ -56,8 +62,6 @@ export default function SettingsPage() {
   })
   const { data: crawlMeta } = useCrawlMeta(id)
   const crawlSite = useCrawlSite(id)
-  const { guilds, loading: loadingGuilds, fetchGuilds } = useDiscordGuilds(id)
-  const selectGuild = useSelectGuild(id)
 
   const {
     projectName,
@@ -82,8 +86,6 @@ export default function SettingsPage() {
     setAiModel,
     channelId,
     setChannelId,
-    showGuildPicker,
-    setShowGuildPicker,
     hydrate,
   } = useSettingsStore()
 
@@ -149,24 +151,10 @@ export default function SettingsPage() {
       const res = await fetch(`/api/projects/${id}/discord`)
       const data = await res.json()
       window.open(data.url, "_blank", "noopener,noreferrer")
-      toast.info(
-        "After adding the bot, click 'Refresh Servers' to select your server."
-      )
-      setShowGuildPicker(true)
+      toast.info("After adding the bot, you’ll be redirected back here and the server will be connected.")
     } catch {
       toast.error("Failed to generate Discord invite link")
     }
-  }
-
-  const handleOpenGuildPicker = () => {
-    setShowGuildPicker(true)
-    fetchGuilds()
-  }
-
-  const handleSelectGuild = (guild: { id: string; name: string }) => {
-    selectGuild.mutate(guild, {
-      onSuccess: () => setShowGuildPicker(false),
-    })
   }
 
   if (settingsLoading || !settings) {
@@ -208,7 +196,6 @@ export default function SettingsPage() {
           channelId={channelId}
           setChannelId={setChannelId}
           onOpenBotInvite={handleOpenBotInvite}
-          onOpenGuildPicker={handleOpenGuildPicker}
           onSave={handleSave}
           saving={saveSettings.isPending}
         />
@@ -248,17 +235,6 @@ export default function SettingsPage() {
         />
       </TabsContent>
 
-      <GuildPickerDialog
-        open={showGuildPicker}
-        onOpenChange={setShowGuildPicker}
-        guilds={guilds}
-        loading={loadingGuilds}
-        onRefresh={fetchGuilds}
-        onSelectGuild={handleSelectGuild}
-        savingGuild={selectGuild.isPending}
-        currentGuildId={settings?.discord?.guildId}
-        onOpenBotInvite={handleOpenBotInvite}
-      />
     </Tabs>
   )
 }

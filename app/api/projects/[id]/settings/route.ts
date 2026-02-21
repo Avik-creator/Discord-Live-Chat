@@ -20,12 +20,21 @@ export async function GET(
     .from(widgetConfigs)
     .where(eq(widgetConfigs.projectId, id))
 
-  const [discord] = await db
+  const [discordRow] = await db
     .select()
     .from(discordConfigs)
     .where(eq(discordConfigs.projectId, id))
 
-  return NextResponse.json({ project, widget: widget || null, discord: discord || null })
+  const discord = discordRow
+    ? {
+        guildId: discordRow.guildId,
+        guildName: discordRow.guildName,
+        channelId: discordRow.channelId ?? null,
+        channelName: discordRow.channelName ?? null,
+      }
+    : null
+
+  return NextResponse.json({ project, widget: widget || null, discord })
 }
 
 /** PUT: Update project settings */

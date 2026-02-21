@@ -1,7 +1,6 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useState, useCallback } from "react"
 import { toast } from "sonner"
 
 export type SettingsData = {
@@ -116,58 +115,3 @@ export function useCrawlSite(projectId: string | undefined) {
   })
 }
 
-export type Guild = {
-  id: string
-  name: string
-  icon: string | null
-  owner?: boolean
-  hasBot?: boolean
-}
-
-export function useDiscordGuilds(projectId: string | undefined) {
-  const queryClient = useQueryClient()
-  const [guilds, setGuilds] = useState<Guild[]>([])
-  const [loading, setLoading] = useState(false)
-
-  const fetchGuilds = useCallback(async () => {
-    if (!projectId) return
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/discord/guilds`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setGuilds(data)
-      if (data.length === 0) {
-        toast.info("No servers found. Make sure you've added the bot first.")
-      }
-    } catch {
-      toast.error("Failed to fetch servers")
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId])
-
-  return { guilds, loading, fetchGuilds }
-}
-
-export function useSelectGuild(projectId: string | undefined) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (guild: { id: string; name: string }) => {
-      const res = await fetch(`/api/projects/${projectId}/discord`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guildId: guild.id, guildName: guild.name }),
-      })
-      if (!res.ok) throw new Error()
-    },
-    onSuccess: async (_, variables) => {
-      await queryClient.refetchQueries({ queryKey: ["settings", projectId] })
-      toast.success(`Connected to ${variables.name}!`)
-    },
-    onError: () => {
-      toast.error("Failed to save server selection")
-    },
-  })
-}

@@ -8,36 +8,36 @@ import { nanoid } from "nanoid"
 
 const DISCORD_API = "https://discord.com/api/v10"
 
-/** GET: Discord bot OAuth callback -- saves guild info */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/**
+ * Single Discord bot OAuth callback. Register this URL in Discord Developer Portal:
+ * https://yourdomain.com/api/discord/callback
+ * Invite URL must include state=projectId and redirect_uri pointing here.
+ */
+export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) {
     return NextResponse.redirect(new URL("/login", req.url))
   }
 
-  const { id } = await params
+  const projectId = req.nextUrl.searchParams.get("state")
   const guildId = req.nextUrl.searchParams.get("guild_id")
 
-  if (!guildId) {
-    return NextResponse.redirect(
-      new URL(`/dashboard/projects/${id}/settings?error=no_guild`, req.url)
-    )
+  if (!projectId || !guildId) {
+    const fallback = projectId
+      ? `/dashboard/projects/${projectId}/settings?error=no_guild`
+      : "/dashboard"
+    return NextResponse.redirect(new URL(fallback, req.url))
   }
 
-  // Verify project ownership
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
+    .where(and(eq(projects.id, projectId), eq(projects.userId, session.user.id)))
 
   if (!project) {
     return NextResponse.redirect(new URL("/dashboard", req.url))
   }
 
-  // Fetch guild info
   let guildName = "Unknown Server"
   try {
     const res = await fetch(`${DISCORD_API}/guilds/${guildId}`, {
@@ -53,27 +53,26 @@ export async function GET(
     // Use fallback name
   }
 
-  // Upsert discord config
   const existing = await db
     .select()
     .from(discordConfigs)
-    .where(eq(discordConfigs.projectId, id))
+    .where(eq(discordConfigs.projectId, projectId))
 
   if (existing.length > 0) {
     await db
       .update(discordConfigs)
       .set({ guildId, guildName })
-      .where(eq(discordConfigs.projectId, id))
+      .where(eq(discordConfigs.projectId, projectId))
   } else {
     await db.insert(discordConfigs).values({
       id: nanoid(12),
-      projectId: id,
+      projectId,
       guildId,
       guildName,
     })
   }
 
   return NextResponse.redirect(
-    new URL(`/dashboard/projects/${id}/settings?discord=connected`, req.url)
+    new URL(`/dashboard/projects/${projectId}/settings?discord=connected`, req.url)
   )
 }
