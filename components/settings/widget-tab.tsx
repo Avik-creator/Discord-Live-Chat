@@ -1,6 +1,5 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -39,8 +38,6 @@ export function WidgetTab({
   setWelcomeMessage,
   offlineMessage,
   setOfflineMessage,
-  onSave,
-  saving,
 }: {
   primaryColor: string
   setPrimaryColor: (v: string) => void
@@ -52,8 +49,6 @@ export function WidgetTab({
   setWelcomeMessage: (v: string) => void
   offlineMessage: string
   setOfflineMessage: (v: string) => void
-  onSave: () => void
-  saving: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -177,11 +172,6 @@ export function WidgetTab({
             />
           </CardContent>
         </Card>
-      </div>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={onSave} disabled={saving} className="text-xs">
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
       </div>
     </div>
   )

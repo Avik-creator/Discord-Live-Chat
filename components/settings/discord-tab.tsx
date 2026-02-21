@@ -46,16 +46,12 @@ export function DiscordTab({
   channelId,
   setChannelId,
   onOpenBotInvite,
-  onSave,
-  saving,
 }: {
   discord: DiscordInfo | null
   channels: Channel[] | undefined
   channelId: string
   setChannelId: (v: string) => void
   onOpenBotInvite: () => void
-  onSave: () => void
-  saving: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -127,11 +123,6 @@ export function DiscordTab({
           )}
         </CardContent>
       </Card>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={onSave} disabled={saving} className="text-xs">
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
-      </div>
     </div>
   )
 }

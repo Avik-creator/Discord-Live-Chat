@@ -35,8 +35,6 @@ export function AITab({
   crawlMeta,
   onCrawlSite,
   crawling,
-  onSave,
-  saving,
 }: {
   aiEnabled: boolean
   setAiEnabled: (v: boolean) => void
@@ -48,8 +46,6 @@ export function AITab({
   crawlMeta: CrawlMeta | undefined
   onCrawlSite: () => void
   crawling: boolean
-  onSave: () => void
-  saving: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -244,11 +240,6 @@ export function AITab({
           </div>
         </CardContent>
       </Card>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={onSave} disabled={saving} className="text-xs">
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
-      </div>
     </div>
   )
 }
