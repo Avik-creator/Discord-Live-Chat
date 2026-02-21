@@ -61,7 +61,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          domain: domain.trim() || null,
+          domain: domain.trim(),
         }),
       })
       if (!res.ok) throw new Error("Failed to create project")
@@ -120,8 +120,8 @@ export default function DashboardPage() {
             <DialogHeader>
               <DialogTitle>Create a new project</DialogTitle>
               <DialogDescription>
-                Give your project a name and optionally set the domain where
-                the widget will be installed.
+                Give your project a name and set the domain where the widget
+                will be installed.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -138,7 +138,7 @@ export default function DashboardPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="domain" className="text-xs">
-                  Domain (optional)
+                  Domain <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="domain"
@@ -159,7 +159,7 @@ export default function DashboardPage() {
               <Button
                 size="sm"
                 onClick={handleCreate}
-                disabled={creating || !name.trim()}
+                disabled={creating || !name.trim() || !domain.trim()}
               >
                 {creating ? "Creating..." : "Create Project"}
               </Button>

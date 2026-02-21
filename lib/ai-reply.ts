@@ -15,6 +15,7 @@ import { eq, asc, and } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { sseBus } from "@/lib/sse"
 import { sendThreadMessage } from "@/lib/discord"
+import { getSiteContext } from "@/lib/crawler"
 
 /**
  * Generates an AI auto-reply for a visitor message in a conversation.
@@ -68,12 +69,24 @@ export async function generateAIReply(
     content: msg.content,
   }))
 
-  // 4. Generate AI response
+  // 4. Fetch cached site context and prepend to system prompt
+  let fullSystemPrompt = systemPrompt
+  try {
+    const siteContext = await getSiteContext(projectId)
+    if (siteContext) {
+      fullSystemPrompt = `${systemPrompt}\n\n--- WEBSITE KNOWLEDGE BASE ---\nBelow is real-time content crawled from the website. Use this to answer visitor questions accurately. Only reference information found here or in the conversation history.\n\n${siteContext}\n--- END KNOWLEDGE BASE ---`
+    }
+  } catch (err) {
+    console.error("[bridgecord] Failed to fetch site context:", err)
+  }
+
+  // 5. Generate AI response
   let aiText: string
   try {
     const result = await generateText({
-      model: groq(modelId),
-      system: systemPrompt,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: groq(modelId) as any,
+      system: fullSystemPrompt,
       messages: modelMessages,
     })
     aiText = result.text
@@ -88,7 +101,7 @@ export async function generateAIReply(
   const msgId = nanoid(12)
   let discordMessageId: string | null = null
 
-  // 5. Post AI reply to Discord thread so agents can see it
+  // 6. Post AI reply to Discord thread so agents can see it
   if (conversation.discordThreadId) {
     try {
       const result = await sendThreadMessage(
@@ -102,7 +115,7 @@ export async function generateAIReply(
     }
   }
 
-  // 6. Save AI message to DB
+  // 7. Save AI message to DB
   await db.insert(messages).values({
     id: msgId,
     conversationId,
@@ -112,13 +125,13 @@ export async function generateAIReply(
     createdAt: new Date(),
   })
 
-  // 7. Update conversation timestamp
+  // 8. Update conversation timestamp
   await db
     .update(conversations)
     .set({ updatedAt: new Date() })
     .where(eq(conversations.id, conversationId))
 
-  // 8. Push to SSE/Redis so the widget gets it instantly
+  // 9. Push to SSE/Redis so the widget gets it instantly
   sseBus.emit(conversationId, {
     type: "new_message",
     message: {

@@ -30,6 +30,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 })
   }
 
+  if (!domain || typeof domain !== "string" || !domain.trim()) {
+    return NextResponse.json({ error: "Domain is required" }, { status: 400 })
+  }
+
   const projectId = nanoid(12)
   const widgetConfigId = nanoid(12)
 
@@ -37,7 +41,7 @@ export async function POST(req: Request) {
     id: projectId,
     userId: session.user.id,
     name,
-    domain: domain || null,
+    domain: domain.trim(),
   })
 
   await db.insert(widgetConfigs).values({
