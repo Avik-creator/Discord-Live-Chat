@@ -21,6 +21,10 @@ import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
 import { GuildPickerDialog } from "@/components/settings/guild-picker-dialog"
 import { DEFAULT_GROQ_MODEL_ID, getValidGroqModelId } from "@/lib/groq-models"
+import { refreshDiscordToken } from "@/lib/discord"
+import { db } from "@/lib/db"
+import { account } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 
 const DEFAULT_AI_PROMPT =
   "You are a friendly and helpful customer support assistant. Answer the visitor's question concisely. If you don't know the answer, let them know a human agent will follow up."
@@ -124,9 +128,8 @@ export default function SettingsPage() {
       onSuccess: () => setShowGuildPicker(false),
     })
   }
-}
 
-async function attemptRefresh(
+  async function attemptRefresh(
   discordAccount: {
     id: string
     refreshToken: string | null
@@ -152,92 +155,92 @@ async function attemptRefresh(
   return refreshed.access_token
 }
 
-  return (
-    <Tabs defaultValue="general" className="space-y-6">
-      <TabsList>
-        <TabsTrigger value="general" className="text-xs">
-          General
-        </TabsTrigger>
-        <TabsTrigger value="discord" className="text-xs">
-          Discord
-        </TabsTrigger>
-        <TabsTrigger value="widget" className="text-xs">
-          Widget
-        </TabsTrigger>
-        <TabsTrigger value="ai" className="text-xs">
-          AI Auto-Reply
-        </TabsTrigger>
-      </TabsList>
+return (
+  <Tabs defaultValue="general" className="space-y-6">
+    <TabsList>
+      <TabsTrigger value="general" className="text-xs">
+        General
+      </TabsTrigger>
+      <TabsTrigger value="discord" className="text-xs">
+        Discord
+      </TabsTrigger>
+      <TabsTrigger value="widget" className="text-xs">
+        Widget
+      </TabsTrigger>
+      <TabsTrigger value="ai" className="text-xs">
+        AI Auto-Reply
+      </TabsTrigger>
+    </TabsList>
 
-      <TabsContent value="general" className="space-y-6">
-        <GeneralTab
-          projectName={projectName}
-          setProjectName={setProjectName}
-          domain={domain}
-          setDomain={setDomain}
-          onSave={handleSave}
-          saving={saveSettings.isPending}
-        />
-      </TabsContent>
-
-      <TabsContent value="discord" className="space-y-6">
-        <DiscordTab
-          discord={settings?.discord ?? null}
-          channels={channels}
-          channelId={channelId}
-          setChannelId={setChannelId}
-          onOpenBotInvite={handleOpenBotInvite}
-          onOpenGuildPicker={handleOpenGuildPicker}
-          onSave={handleSave}
-          saving={saveSettings.isPending}
-        />
-      </TabsContent>
-
-      <TabsContent value="widget" className="space-y-6">
-        <WidgetTab
-          primaryColor={primaryColor}
-          setPrimaryColor={setPrimaryColor}
-          position={position}
-          setPosition={setPosition}
-          bubbleShape={bubbleShape}
-          setBubbleShape={setBubbleShape}
-          welcomeMessage={welcomeMessage}
-          setWelcomeMessage={setWelcomeMessage}
-          offlineMessage={offlineMessage}
-          setOfflineMessage={setOfflineMessage}
-          onSave={handleSave}
-          saving={saveSettings.isPending}
-        />
-      </TabsContent>
-
-      <TabsContent value="ai" className="space-y-6">
-        <AITab
-          aiEnabled={aiEnabled}
-          setAiEnabled={setAiEnabled}
-          aiModel={aiModel}
-          setAiModel={setAiModel}
-          aiSystemPrompt={aiSystemPrompt}
-          setAiSystemPrompt={setAiSystemPrompt}
-          domain={domain}
-          crawlMeta={crawlMeta}
-          onCrawlSite={() => crawlSite.mutate()}
-          crawling={crawlSite.isPending}
-          onSave={handleSave}
-          saving={saveSettings.isPending}
-        />
-      </TabsContent>
-
-      <GuildPickerDialog
-        open={showGuildPicker}
-        onOpenChange={setShowGuildPicker}
-        guilds={guilds}
-        loading={loadingGuilds}
-        onRefresh={fetchGuilds}
-        onSelectGuild={handleSelectGuild}
-        savingGuild={selectGuild.isPending}
-        currentGuildId={settings?.discord?.guildId}
-        onOpenBotInvite={handleOpenBotInvite}
+    <TabsContent value="general" className="space-y-6">
+      <GeneralTab
+        projectName={projectName}
+        setProjectName={setProjectName}
+        domain={domain}
+        setDomain={setDomain}
+        onSave={handleSave}
+        saving={saveSettings.isPending}
       />
-    </Tabs>
-  )
+    </TabsContent>
+
+    <TabsContent value="discord" className="space-y-6">
+      <DiscordTab
+        discord={settings?.discord ?? null}
+        channels={channels}
+        channelId={channelId}
+        setChannelId={setChannelId}
+        onOpenBotInvite={handleOpenBotInvite}
+        onOpenGuildPicker={handleOpenGuildPicker}
+        onSave={handleSave}
+        saving={saveSettings.isPending}
+      />
+    </TabsContent>
+
+    <TabsContent value="widget" className="space-y-6">
+      <WidgetTab
+        primaryColor={primaryColor}
+        setPrimaryColor={setPrimaryColor}
+        position={position}
+        setPosition={setPosition}
+        bubbleShape={bubbleShape}
+        setBubbleShape={setBubbleShape}
+        welcomeMessage={welcomeMessage}
+        setWelcomeMessage={setWelcomeMessage}
+        offlineMessage={offlineMessage}
+        setOfflineMessage={setOfflineMessage}
+        onSave={handleSave}
+        saving={saveSettings.isPending}
+      />
+    </TabsContent>
+
+    <TabsContent value="ai" className="space-y-6">
+      <AITab
+        aiEnabled={aiEnabled}
+        setAiEnabled={setAiEnabled}
+        aiModel={aiModel}
+        setAiModel={setAiModel}
+        aiSystemPrompt={aiSystemPrompt}
+        setAiSystemPrompt={setAiSystemPrompt}
+        domain={domain}
+        crawlMeta={crawlMeta}
+        onCrawlSite={() => crawlSite.mutate()}
+        crawling={crawlSite.isPending}
+        onSave={handleSave}
+        saving={saveSettings.isPending}
+      />
+    </TabsContent>
+
+    <GuildPickerDialog
+      open={showGuildPicker}
+      onOpenChange={setShowGuildPicker}
+      guilds={guilds}
+      loading={loadingGuilds}
+      onRefresh={fetchGuilds}
+      onSelectGuild={handleSelectGuild}
+      savingGuild={selectGuild.isPending}
+      currentGuildId={settings?.discord?.guildId}
+      onOpenBotInvite={handleOpenBotInvite}
+    />
+  </Tabs>
+)
 }
