@@ -368,37 +368,38 @@ onUnmounted(() => {
         </CardContent>
       </Card>
 
-      {/* Direct link */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
-            Direct Link
-          </CardTitle>
-          <CardDescription className="text-xs">
-            You can also link directly to the full-page widget for testing
-            or sharing.
-          </CardDescription>
-        </CardHeader>
-        <Separator />
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-3">
-            <code className="flex-1 truncate border border-border bg-accent/50 px-3 py-2 text-xs font-mono text-foreground">
-              {appUrl}/widget/{id}
-            </code>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5 text-[10px]"
-              onClick={() =>
-                window.open(`${appUrl}/widget/${id}`, "_blank")
-              }
-            >
-              Open
-              <ExternalLink className="h-3 w-3" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Direct link — only visible in development */}
+      {process.env.NODE_ENV === "development" && (
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-foreground">
+              Direct Link
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Dev-only: link directly to the full-page widget for testing.
+            </CardDescription>
+          </CardHeader>
+          <Separator />
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <code className="flex-1 truncate border border-border bg-accent/50 px-3 py-2 text-xs font-mono text-foreground">
+                {appUrl}/widget/{id}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 text-[10px]"
+                onClick={() =>
+                  window.open(`${appUrl}/widget/${id}`, "_blank")
+                }
+              >
+                Open
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
