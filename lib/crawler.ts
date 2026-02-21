@@ -217,21 +217,57 @@ export async function crawlSite(
 
 /**
  * Get the cached site context for a project.
- * Returns the context string or null if not cached.
+ * If the cache has expired, triggers a background re-crawl automatically
+ * using the project's domain so the AI always has fresh site knowledge.
+ * Returns the context string or null if not cached and no domain is set.
  */
 export async function getSiteContext(
   projectId: string
 ): Promise<string | null> {
   const cacheKey = `${CACHE_PREFIX}${projectId}`
   const raw = await redis.get<string>(cacheKey)
-  if (!raw) return null
 
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
-    return (parsed as { context: string }).context || null
-  } catch {
-    return null
+  if (raw) {
+    try {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
+      return (parsed as { context: string }).context || null
+    } catch {
+      return null
+    }
   }
+
+  // Cache expired or missing -- auto-recrawl in background if domain exists
+  // We use a lock key to prevent multiple simultaneous re-crawls
+  const lockKey = `${CACHE_PREFIX}${projectId}:recrawl-lock`
+  const locked = await redis.set(lockKey, "1", { ex: 120, nx: true })
+
+  if (locked) {
+    // Fire-and-forget: recrawl in the background
+    recrawlInBackground(projectId).catch((err) =>
+      console.error("[bridgecord] Background recrawl failed:", err)
+    )
+  }
+
+  return null
+}
+
+/**
+ * Background re-crawl: looks up the project domain from the DB and re-crawls.
+ */
+async function recrawlInBackground(projectId: string): Promise<void> {
+  // Dynamic import to avoid circular dependency with db
+  const { db } = await import("@/lib/db")
+  const { projects } = await import("@/lib/db/schema")
+  const { eq } = await import("drizzle-orm")
+
+  const [project] = await db
+    .select({ domain: projects.domain })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+
+  if (!project?.domain) return
+
+  await crawlSite(projectId, project.domain)
 }
 
 /**
