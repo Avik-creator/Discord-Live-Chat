@@ -92,15 +92,17 @@ export async function createThread(
   return { threadId: thread.id, messageId: msg.id }
 }
 
-/** Send a message in a thread */
+/** Send a message in a thread (auto-truncates to Discord's 2000-char limit) */
 export async function sendThreadMessage(
   threadId: string,
   content: string,
   username?: string
 ) {
-  const displayContent = username
-    ? `**${username}:** ${content}`
-    : `**Visitor:** ${content}`
+  const prefix = username ? `**${username}:** ` : `**Visitor:** `
+  const maxBody = 2000 - prefix.length
+  const body =
+    content.length > maxBody ? content.slice(0, maxBody - 1) + "…" : content
+  const displayContent = `${prefix}${body}`
 
   const res = await fetch(`${DISCORD_API}/channels/${threadId}/messages`, {
     method: "POST",
@@ -257,15 +259,17 @@ export async function getGuildChannels(guildId: string) {
 
 /**
  * Generate the Discord OAuth URL for adding the bot to a server.
- * Uses the simpler bot invite flow -- no redirect_uri needed.
- * Discord will redirect back to the page that initiated the request,
- * and we include `state` with the projectId so the callback page can
- * identify which project to associate the guild with.
+ * If redirectUri is provided, Discord will redirect there with guild_id after
+ * the user authorizes, so we can auto-save the connected server.
  *
  * Permissions: VIEW_CHANNEL, SEND_MESSAGES, EMBED_LINKS, READ_MESSAGE_HISTORY,
  *   CREATE_PUBLIC_THREADS, SEND_MESSAGES_IN_THREADS, MANAGE_THREADS
  */
-export function getBotInviteUrl(projectId: string) {
+export function getBotInviteUrl(
+  projectId: string,
+  redirectUri?: string,
+  state?: string
+) {
   const permissions = "326417722368"
 
   const params = new URLSearchParams({
@@ -275,12 +279,11 @@ export function getBotInviteUrl(projectId: string) {
     disable_guild_select: "false",
   })
 
-  // We use the guild_id from the callback URL query params.
-  // Discord's bot invite flow without redirect_uri won't redirect back,
-  // so we use a registered redirect_uri with response_type=code.
-  // Instead, use the simpler approach: open in a popup and poll,
-  // or use a custom redirect page. Simplest: don't use redirect_uri at all
-  // and handle it client-side.
+  if (redirectUri) {
+    params.set("redirect_uri", redirectUri)
+    params.set("response_type", "code")
+  }
+  if (state) params.set("state", state)
 
   return `https://discord.com/oauth2/authorize?${params}`
 }

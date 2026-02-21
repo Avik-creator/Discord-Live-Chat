@@ -1,228 +1,238 @@
-import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
-import { projects, widgetConfigs, discordConfigs, account } from "@/lib/db/schema"
-import { and, eq } from "drizzle-orm"
-import { headers } from "next/headers"
-import { redirect, notFound } from "next/navigation"
-import { getUserGuilds, getBotGuilds, refreshDiscordToken } from "@/lib/discord"
-import { SettingsTabs } from "./_components/settings-tabs"
+"use client"
 
-type GuildEntry = {
-  id: string
-  name: string
-  icon: string | null
-  owner?: boolean
-  hasBot?: boolean
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useParams, useSearchParams } from "next/navigation"
+import { useEffect } from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
+import {
+  useProjectSettings,
+  useSaveSettings,
+  useCrawlMeta,
+  useCrawlSite,
+  type SaveSettingsPayload,
+} from "@/hooks/use-settings"
+import { GeneralTab } from "@/components/settings/general-tab"
+import { DiscordTab } from "@/components/settings/discord-tab"
+import { WidgetTab } from "@/components/settings/widget-tab"
+import { AITab } from "@/components/settings/ai-tab"
+import { useSettingsStore } from "@/stores/settings-store"
+import { settingsFormSchema } from "@/lib/validations/settings"
+
+function SettingsLoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2">
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
+  )
 }
 
-/**
- * Fetch guilds for the server list. Tries user token first (shows all
- * admin/owner servers), falls back to bot-only guilds if user token fails.
- */
-async function fetchGuilds(userId: string): Promise<GuildEntry[]> {
-  // 1. Get bot guilds (always available via bot token)
-  let botGuilds: { id: string; name: string; icon: string | null }[] = []
-  const botGuildIds = new Set<string>()
-  try {
-    botGuilds = await getBotGuilds()
-    for (const g of botGuilds) botGuildIds.add(g.id)
-  } catch {
-    // Bot token issue - continue with empty
-  }
+export default function SettingsPage() {
+  const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const { data: settings, isLoading: settingsLoading } = useProjectSettings(id)
+  const saveSettings = useSaveSettings(id)
 
-  // 2. Get the user's Discord account
-  const [discordAccount] = await db
-    .select()
-    .from(account)
-    .where(
-      and(eq(account.userId, userId), eq(account.providerId, "discord"))
-    )
-
-  if (!discordAccount?.accessToken) {
-    // No user token at all - return bot guilds as fallback
-    return botGuilds.map((g) => ({ ...g, owner: false, hasBot: true }))
-  }
-
-  // 3. Try to get user guilds, refreshing token if needed
-  const userGuilds = await tryGetUserGuilds(discordAccount, botGuildIds)
-
-  if (userGuilds) return userGuilds
-
-  // 4. Fallback: return bot guilds so the user at least sees something
-  return botGuilds.map((g) => ({ ...g, owner: false, hasBot: true }))
-}
-
-/**
- * Attempt to fetch user guilds. If the token is expired or returns 401,
- * refresh and retry once. Returns null if all attempts fail.
- */
-async function tryGetUserGuilds(
-  discordAccount: {
-    id: string
-    accessToken: string | null
-    refreshToken: string | null
-    accessTokenExpiresAt: Date | null
-  },
-  botGuildIds: Set<string>
-): Promise<GuildEntry[] | null> {
-  let accessToken = discordAccount.accessToken!
-
-  // Pre-emptive refresh if the stored expiry has passed
-  const isExpired =
-    discordAccount.accessTokenExpiresAt &&
-    new Date(discordAccount.accessTokenExpiresAt) <= new Date()
-
-  if (isExpired) {
-    const refreshed = await attemptRefresh(discordAccount)
-    if (refreshed) {
-      accessToken = refreshed
-    } else {
-      return null
+  useEffect(() => {
+    if (searchParams.get("discord") === "connected" && id) {
+      queryClient.invalidateQueries({ queryKey: ["settings", id] })
+      toast.success("Discord server connected!")
     }
-  }
-
-  // First attempt
-  try {
-    return mapUserGuilds(await getUserGuilds(accessToken), botGuildIds)
-  } catch {
-    // Token might be invalid even if not "expired" -- refresh and retry
-    const refreshed = await attemptRefresh(discordAccount)
-    if (!refreshed) return null
-
-    try {
-      return mapUserGuilds(await getUserGuilds(refreshed), botGuildIds)
-    } catch {
-      return null
-    }
-  }
-}
-
-async function attemptRefresh(
-  discordAccount: {
-    id: string
-    refreshToken: string | null
-  }
-): Promise<string | null> {
-  if (!discordAccount.refreshToken) return null
-
-  const refreshed = await refreshDiscordToken(discordAccount.refreshToken)
-  if (!refreshed) return null
-
-  await db
-    .update(account)
-    .set({
-      accessToken: refreshed.access_token,
-      refreshToken: refreshed.refresh_token,
-      accessTokenExpiresAt: new Date(
-        Date.now() + refreshed.expires_in * 1000
-      ),
-      updatedAt: new Date(),
-    })
-    .where(eq(account.id, discordAccount.id))
-
-  return refreshed.access_token
-}
-
-function mapUserGuilds(
-  userGuilds: {
-    id: string
-    name: string
-    icon: string | null
-    owner: boolean
-  }[],
-  botGuildIds: Set<string>
-): GuildEntry[] {
-  const mapped = userGuilds.map((g) => ({
-    id: g.id,
-    name: g.name,
-    icon: g.icon,
-    owner: g.owner,
-    hasBot: botGuildIds.has(g.id),
-  }))
-  // Bot-installed servers first, then alphabetical
-  mapped.sort((a, b) => {
-    if (a.hasBot !== b.hasBot) return a.hasBot ? -1 : 1
-    return a.name.localeCompare(b.name)
+  }, [searchParams, id, queryClient])
+  const { data: channels } = useQuery({
+    queryKey: ["channels", id, settings?.discord?.guildId],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/discord/channels`).then((r) => r.json()),
+    enabled: !!id && !!settings?.discord?.guildId,
   })
-  return mapped
-}
+  const { data: crawlMeta } = useCrawlMeta(id)
+  const crawlSite = useCrawlSite(id)
 
-// ─────────────────────────────────────────────────────────────────────────────
+  const {
+    projectName,
+    setProjectName,
+    domain,
+    setDomain,
+    primaryColor,
+    setPrimaryColor,
+    position,
+    setPosition,
+    welcomeMessage,
+    setWelcomeMessage,
+    offlineMessage,
+    setOfflineMessage,
+    bubbleShape,
+    setBubbleShape,
+    aiEnabled,
+    setAiEnabled,
+    aiSystemPrompt,
+    setAiSystemPrompt,
+    aiModel,
+    setAiModel,
+    channelId,
+    setChannelId,
+    hydrate,
+  } = useSettingsStore()
 
-export default async function SettingsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) redirect("/login")
+  // Only hydrate when we have settings from the API (avoid flashing empty form)
+  useEffect(() => {
+    if (settings) hydrate(settings)
+  }, [settings, hydrate])
 
-  const { id } = await params
+  const handleSave = () => {
+    const selectedChannel = channels?.find(
+      (c: { id: string; name: string }) => c.id === channelId
+    )
+    const rawPayload = {
+      name: projectName.trim(),
+      domain: domain.trim(),
+      widget: {
+        primaryColor,
+        position,
+        welcomeMessage,
+        offlineMessage,
+        bubbleShape,
+        aiEnabled,
+        aiSystemPrompt,
+        aiModel,
+      },
+      ...(channelId.trim() && {
+        discord: {
+          channelId: channelId.trim(),
+          channelName: selectedChannel?.name,
+        },
+      }),
+    }
 
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
+    const parsed = settingsFormSchema.safeParse(rawPayload)
 
-  if (!project) notFound()
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]
+      const msg =
+        firstError?.message ?? "Please check the form and try again."
+      toast.error(msg)
+      return
+    }
 
-  // Fetch widget config
-  let widget = null
-  try {
-    const [w] = await db
-      .select()
-      .from(widgetConfigs)
-      .where(eq(widgetConfigs.projectId, id))
-    widget = w || null
-  } catch {
-    const [w] = await db
-      .select({
-        id: widgetConfigs.id,
-        projectId: widgetConfigs.projectId,
-        primaryColor: widgetConfigs.primaryColor,
-        position: widgetConfigs.position,
-        welcomeMessage: widgetConfigs.welcomeMessage,
-        offlineMessage: widgetConfigs.offlineMessage,
-      })
-      .from(widgetConfigs)
-      .where(eq(widgetConfigs.projectId, id))
-    widget = w ? { ...w, bubbleShape: "rounded" } : null
+    const payload: SaveSettingsPayload = {
+      name: parsed.data.name,
+      domain: parsed.data.domain,
+      widget: parsed.data.widget,
+      ...(parsed.data.discord?.channelId && {
+        discord: {
+          channelId: parsed.data.discord.channelId,
+          channelName: parsed.data.discord.channelName,
+        },
+      }),
+    }
+    saveSettings.mutate(payload)
   }
 
-  // Fetch discord config
-  const [discord] = await db
-    .select()
-    .from(discordConfigs)
-    .where(eq(discordConfigs.projectId, id))
-
-  // Fetch guilds only when not connected yet
-  const guilds = discord ? [] : await fetchGuilds(session.user.id)
-
-  const widgetData = {
-    primaryColor: widget?.primaryColor ?? "#5865F2",
-    position: widget?.position ?? "bottom-right",
-    welcomeMessage: widget?.welcomeMessage ?? "",
-    offlineMessage: widget?.offlineMessage ?? "",
-    bubbleShape:
-      (widget as { bubbleShape?: string } | null)?.bubbleShape ?? "rounded",
+  const handleOpenBotInvite = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/discord`)
+      const data = await res.json()
+      window.location.href = data.url
+    } catch {
+      toast.error("Failed to generate Discord invite link")
+    }
   }
 
-  const discordData = discord
-    ? {
-        guildId: discord.guildId,
-        guildName: discord.guildName,
-        channelId: discord.channelId ?? undefined,
-        channelName: discord.channelName ?? undefined,
-      }
-    : null
+  if (settingsLoading || !settings) {
+    return <SettingsLoadingSkeleton />
+  }
 
   return (
-    <SettingsTabs
-      projectId={id}
-      project={{ name: project.name, domain: project.domain }}
-      widget={widgetData}
-      discord={discordData}
-      guilds={guilds}
-    />
+    <div className="space-y-6">
+      <Tabs defaultValue="general" className="space-y-6">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="general" className="text-xs">
+              General
+            </TabsTrigger>
+            <TabsTrigger value="discord" className="text-xs">
+              Discord
+            </TabsTrigger>
+            <TabsTrigger value="widget" className="text-xs">
+              Widget
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="text-xs">
+              AI Auto-Reply
+            </TabsTrigger>
+          </TabsList>
+
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saveSettings.isPending}
+            className="text-xs"
+          >
+            {saveSettings.isPending ? "Saving..." : "Save All Settings"}
+          </Button>
+        </div>
+
+        <TabsContent value="general" className="space-y-6">
+          <GeneralTab
+            projectName={projectName}
+            setProjectName={setProjectName}
+            domain={domain}
+            setDomain={setDomain}
+          />
+        </TabsContent>
+
+        <TabsContent value="discord" className="space-y-6">
+          <DiscordTab
+            discord={settings?.discord ?? null}
+            channels={channels}
+            channelId={channelId}
+            setChannelId={setChannelId}
+            onOpenBotInvite={handleOpenBotInvite}
+          />
+        </TabsContent>
+
+        <TabsContent value="widget" className="space-y-6">
+          <WidgetTab
+            primaryColor={primaryColor}
+            setPrimaryColor={setPrimaryColor}
+            position={position}
+            setPosition={setPosition}
+            bubbleShape={bubbleShape}
+            setBubbleShape={setBubbleShape}
+            welcomeMessage={welcomeMessage}
+            setWelcomeMessage={setWelcomeMessage}
+            offlineMessage={offlineMessage}
+            setOfflineMessage={setOfflineMessage}
+          />
+        </TabsContent>
+
+        <TabsContent value="ai" className="space-y-6">
+          <AITab
+            aiEnabled={aiEnabled}
+            setAiEnabled={setAiEnabled}
+            aiModel={aiModel}
+            setAiModel={setAiModel}
+            aiSystemPrompt={aiSystemPrompt}
+            setAiSystemPrompt={setAiSystemPrompt}
+            domain={domain}
+            crawlMeta={crawlMeta}
+            onCrawlSite={() => crawlSite.mutate()}
+            crawling={crawlSite.isPending}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

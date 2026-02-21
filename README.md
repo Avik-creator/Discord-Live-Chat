@@ -108,7 +108,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application.
 2. Under **Bot**, click "Add Bot" and copy the bot token.
-3. Under **OAuth2**, add `http://localhost:3000/api/auth/callback/discord` as a redirect URI (and your production URL).
+3. Under **OAuth2 → Redirects**, add **both** redirect URIs:
+   - Login/signup: `http://localhost:3000/api/auth/callback/discord`
+   - Connect bot to project: `http://localhost:3000/api/discord/callback`
+   Use exact matches (same protocol, host, port, path, and no extra trailing slash), and add production equivalents too.
 4. Enable the following bot permissions:
    - View Channels
    - Send Messages

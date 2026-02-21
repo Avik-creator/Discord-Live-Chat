@@ -1,16 +1,9 @@
+import { corsHeaders } from "@/lib/api/cors"
 import { db } from "@/lib/db"
 import { conversations, projects } from "@/lib/db/schema"
 import { and, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { nanoid } from "nanoid"
-
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  }
-}
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() })
@@ -31,13 +24,10 @@ export async function POST(
       { status: 400, headers: corsHeaders() }
     )
   }
-
-  // Verify project exists
   const [project] = await db
     .select()
     .from(projects)
     .where(eq(projects.id, projectId))
-
   if (!project) {
     return NextResponse.json(
       { error: "Project not found" },
@@ -57,10 +47,7 @@ export async function POST(
     )
 
   if (existing) {
-    return NextResponse.json(
-      { conversationId: existing.id },
-      { headers: corsHeaders() }
-    )
+    return NextResponse.json({ conversationId: existing.id }, { headers: corsHeaders() })
   }
 
   // Create new conversation
@@ -73,8 +60,5 @@ export async function POST(
     visitorEmail: visitorEmail || null,
   })
 
-  return NextResponse.json(
-    { conversationId },
-    { status: 201, headers: corsHeaders() }
-  )
+  return NextResponse.json({ conversationId }, { status: 201, headers: corsHeaders() })
 }

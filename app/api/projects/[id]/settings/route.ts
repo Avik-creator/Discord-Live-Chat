@@ -1,8 +1,7 @@
-import { auth } from "@/lib/auth"
+import { requireAuth, requireProject } from "@/lib/api/auth"
 import { db } from "@/lib/db"
 import { projects, widgetConfigs, discordConfigs } from "@/lib/db/schema"
-import { and, eq } from "drizzle-orm"
-import { headers } from "next/headers"
+import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 /** GET: Fetch project settings (widget + discord config) */
@@ -10,44 +9,32 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id } = await params
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
 
-  const [project] = await db
+  const [widget = null] = await db
     .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
+    .from(widgetConfigs)
+    .where(eq(widgetConfigs.projectId, id))
 
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
-  let widget = null
-  try {
-    const [w] = await db.select().from(widgetConfigs).where(eq(widgetConfigs.projectId, id))
-    widget = w || null
-  } catch {
-    // bubble_shape column may not exist yet – fall back to selecting known columns
-    const [w] = await db
-      .select({
-        id: widgetConfigs.id,
-        projectId: widgetConfigs.projectId,
-        primaryColor: widgetConfigs.primaryColor,
-        position: widgetConfigs.position,
-        welcomeMessage: widgetConfigs.welcomeMessage,
-        offlineMessage: widgetConfigs.offlineMessage,
-      })
-      .from(widgetConfigs)
-      .where(eq(widgetConfigs.projectId, id))
-    widget = w ? { ...w, bubbleShape: "rounded" } : null
-  }
-
-  const [discord] = await db
+  const [discordRow] = await db
     .select()
     .from(discordConfigs)
     .where(eq(discordConfigs.projectId, id))
 
-  return NextResponse.json({ project, widget: widget || null, discord: discord || null })
+  const discord = discordRow
+    ? {
+        guildId: discordRow.guildId,
+        guildName: discordRow.guildName,
+        channelId: discordRow.channelId ?? null,
+        channelName: discordRow.channelName ?? null,
+      }
+    : null
+
+  return NextResponse.json({ project, widget: widget || null, discord })
 }
 
 /** PUT: Update project settings */
@@ -55,18 +42,12 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
   const { id } = await params
+  const project = await requireProject(id, session.user.id)
+  if (project instanceof NextResponse) return project
   const body = await req.json()
-
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
-
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   // Update project name/domain
   if (body.name || body.domain !== undefined) {
@@ -88,15 +69,12 @@ export async function PUT(
     if (body.widget.welcomeMessage !== undefined) widgetUpdate.welcomeMessage = body.widget.welcomeMessage
     if (body.widget.offlineMessage !== undefined) widgetUpdate.offlineMessage = body.widget.offlineMessage
 
-    // First, try to save all fields including bubbleShape
     if (body.widget.bubbleShape) widgetUpdate.bubbleShape = body.widget.bubbleShape
-    try {
-      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
-    } catch {
-      // bubble_shape column may not exist yet – save without it
-      delete widgetUpdate.bubbleShape
-      await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
-    }
+    if (body.widget.aiEnabled !== undefined) widgetUpdate.aiEnabled = body.widget.aiEnabled
+    if (body.widget.aiSystemPrompt !== undefined) widgetUpdate.aiSystemPrompt = body.widget.aiSystemPrompt
+    if (body.widget.aiModel) widgetUpdate.aiModel = body.widget.aiModel
+
+    await db.update(widgetConfigs).set(widgetUpdate).where(eq(widgetConfigs.projectId, id))
   }
 
   // Update discord channel selection

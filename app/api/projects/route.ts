@@ -1,14 +1,15 @@
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api/auth"
+import { badRequest } from "@/lib/api/errors"
 import { db } from "@/lib/db"
 import { projects, widgetConfigs } from "@/lib/db/schema"
+import { createProjectSchema } from "@/lib/validations/project"
 import { eq } from "drizzle-orm"
-import { headers } from "next/headers"
 import { nanoid } from "nanoid"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const userProjects = await db
     .select()
@@ -20,24 +21,39 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
-  const body = await req.json()
-  const { name, domain } = body
-
-  if (!name || typeof name !== "string") {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 })
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return badRequest("Invalid JSON body")
   }
 
+  const raw = (body && typeof body === "object" ? body : {}) as Record<string, unknown>
+  const name = typeof raw.name === "string" ? raw.name.trim() : ""
+  const domainInput =
+    typeof raw.domain === "string" ? raw.domain.trim() : ""
+  const parsed = createProjectSchema.safeParse({
+    name,
+    domain: domainInput,
+  })
+
+  if (!parsed.success) {
+    const first = parsed.error.errors[0]
+    return badRequest(first?.message ?? "Invalid request")
+  }
+
+  const domain = parsed.data.domain
   const projectId = nanoid(12)
   const widgetConfigId = nanoid(12)
 
   await db.insert(projects).values({
     id: projectId,
     userId: session.user.id,
-    name,
-    domain: domain || null,
+    name: parsed.data.name,
+    domain,
   })
 
   await db.insert(widgetConfigs).values({

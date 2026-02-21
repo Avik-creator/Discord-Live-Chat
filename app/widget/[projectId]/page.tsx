@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Send, MessageSquare, User } from "lucide-react"
+import { WidgetHeader } from "@/components/widget/widget-header"
+import { WidgetInput } from "@/components/widget/widget-input"
+import { MarkdownContent } from "@/components/ui/markdown-content"
 
 interface Message {
   id: string
@@ -57,67 +61,66 @@ function hexToLightBg(hex: string, opacity: number = 0.12): string {
 
 export default function WidgetPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [config, setConfig] = useState<WidgetConfig | null>(null)
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [conversationId, setConversationId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const visitorIdRef = useRef<string>("")
+  const visitorIdRef = useRef<string>(
+    typeof window !== "undefined" ? getVisitorId() : ""
+  )
   const sseRef = useRef<EventSource | null>(null)
   const [animateIds, setAnimateIds] = useState<Set<string>>(new Set())
 
-  // Load config
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const res = await fetch(`/api/widget/${projectId}/config`)
-        if (res.ok) {
-          const data = await res.json()
-          setConfig(data)
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadConfig()
-    visitorIdRef.current = getVisitorId()
-  }, [projectId])
+  // Load config via TanStack Query
+  const { data: config, isLoading: loading } = useQuery<WidgetConfig>({
+    queryKey: ["widget-config", projectId],
+    queryFn: () =>
+      fetch(`/api/widget/${projectId}/config`).then((r) => r.json()),
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  })
 
-  // Initialize or resume conversation
-  useEffect(() => {
-    if (!config) return
-    const initConversation = async () => {
-      try {
-        const res = await fetch(`/api/widget/${projectId}/conversations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ visitorId: visitorIdRef.current }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setConversationId(data.conversationId)
-        }
-      } catch {
-        // silent
-      }
-    }
-    initConversation()
-  }, [config, projectId])
+  // Initialize or resume conversation via TanStack Query
+  const { data: conversationData } = useQuery({
+    queryKey: ["widget-conversation", projectId, visitorIdRef.current],
+    queryFn: () =>
+      fetch(`/api/widget/${projectId}/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId: visitorIdRef.current }),
+      }).then((r) => r.json()),
+    enabled: !!config && !!visitorIdRef.current,
+    staleTime: Infinity,
+  })
 
-  // Fetch initial messages then set up SSE
-  const fetchMessages = useCallback(async () => {
+  const conversationId = conversationData?.conversationId ?? null
+
+  // Fetch messages from the server and merge with any pending optimistic messages
+  const fetchMessages = useCallback(async (isInitial = false) => {
     if (!conversationId) return
     try {
       const res = await fetch(
         `/api/widget/${projectId}/conversations/${conversationId}/messages`
       )
       if (res.ok) {
-        const data = await res.json()
-        setMessages(data)
+        const serverMsgs: Message[] = await res.json()
+        if (isInitial) {
+          setMessages(serverMsgs)
+          return
+        }
+        // Merge: keep optimistic (temp-) messages that the server hasn't confirmed yet
+        setMessages((prev) => {
+          const serverIds = new Set(serverMsgs.map((m) => m.id))
+          const pending = prev.filter(
+            (m) =>
+              m.id.startsWith("temp-") &&
+              !serverMsgs.some(
+                (s) => s.sender === m.sender && s.content === m.content
+              )
+          )
+          return [...serverMsgs, ...pending]
+        })
       }
     } catch {
       // silent
@@ -128,8 +131,8 @@ export default function WidgetPage() {
   useEffect(() => {
     if (!conversationId) return
 
-    // Load initial messages
-    fetchMessages()
+    // Load initial messages (full replace is safe here, no optimistic messages yet)
+    fetchMessages(true)
 
     let alive = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -248,47 +251,16 @@ export default function WidgetPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 animate-fade-in-down"
-        style={{
-          backgroundColor: primaryColor,
-          borderRadius: bubbleShape === "pill" ? "0 0 20px 20px" : undefined,
-        }}
-      >
-        <div
-          className="flex h-9 w-9 items-center justify-center"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.15)",
-            borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px",
-          }}
-        >
-          <MessageSquare className="h-4 w-4 text-[#fff]" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-[#fff]">
-            {config?.projectName || "Support"}
-          </p>
-          <p className="text-[11px] text-[rgba(255,255,255,0.75)]">
-            We typically reply in a few minutes
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-2 w-2 animate-pulse-soft"
-            style={{
-              backgroundColor: "#4ade80",
-              borderRadius: "50%",
-            }}
-          />
-          <span className="text-[10px] text-[rgba(255,255,255,0.7)]">Online</span>
-        </div>
-      </div>
+      <WidgetHeader
+        projectName={config?.projectName ?? "Support"}
+        primaryColor={primaryColor}
+        bubbleShape={bubbleShape}
+      />
 
       {/* Messages area */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
-        {/* Welcome message */}
-        {messages.length === 0 && config?.welcomeMessage && (
+        {/* Welcome message — always shown at top */}
+        {config?.welcomeMessage && (
           <div className="flex gap-2.5 animate-slide-in-bottom">
             <div
               className="flex h-7 w-7 shrink-0 items-center justify-center"
@@ -350,9 +322,16 @@ export default function WidgetPage() {
                   border: isVisitor ? "none" : `1px solid ${hexToLightBg(primaryColor, 0.15)}`,
                 }}
               >
-                <p className={`whitespace-pre-wrap text-[13px] leading-relaxed ${!isVisitor ? "text-foreground" : ""}`}>
-                  {msg.content}
-                </p>
+                {isVisitor ? (
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+                    {msg.content}
+                  </p>
+                ) : (
+                  <MarkdownContent
+                    content={msg.content}
+                    className={!isVisitor ? "text-foreground" : ""}
+                  />
+                )}
               </div>
             </div>
           )
@@ -360,54 +339,14 @@ export default function WidgetPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div
-        className="border-t border-border bg-card/50 p-3 animate-fade-in-up backdrop-blur-sm"
-        style={{ animationDelay: "200ms" }}
-      >
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            disabled={sending}
-            className="flex-1 bg-background px-3.5 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200"
-            style={{
-              borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "24px" : "8px",
-              border: "1px solid var(--border)",
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={sending || !input.trim()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center text-[#fff] transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-40"
-            style={{
-              backgroundColor: primaryColor,
-              borderRadius: bubbleShape === "sharp" ? "0" : bubbleShape === "pill" ? "50%" : "8px",
-            }}
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mt-2 text-center text-[10px] text-muted-foreground">
-          Powered by{" "}
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-foreground hover:underline"
-          >
-            Bridgecord
-          </a>
-        </p>
-      </div>
+      <WidgetInput
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        disabled={sending}
+        primaryColor={primaryColor}
+        bubbleShape={bubbleShape}
+      />
     </div>
   )
 }
