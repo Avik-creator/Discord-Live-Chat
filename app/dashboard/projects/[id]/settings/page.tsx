@@ -21,10 +21,32 @@ import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
 import { GuildPickerDialog } from "@/components/settings/guild-picker-dialog"
 import { useSettingsStore } from "@/stores/settings-store"
+import {
+  settingsFormSchema,
+  normalizeDomainForValidation,
+} from "@/lib/validations/settings"
+
+function SettingsLoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2">
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: settings, isLoading } = useProjectSettings(id)
+  const { data: settings, isLoading: settingsLoading } = useProjectSettings(id)
   const saveSettings = useSaveSettings(id)
   const { data: channels } = useQuery({
     queryKey: ["channels", id, settings?.discord?.guildId],
@@ -65,21 +87,18 @@ export default function SettingsPage() {
     hydrate,
   } = useSettingsStore()
 
+  // Only hydrate when we have settings from the API (avoid flashing empty form)
   useEffect(() => {
-    hydrate(settings ?? null)
+    if (settings) hydrate(settings)
   }, [settings, hydrate])
 
   const handleSave = () => {
-    if (!domain.trim()) {
-      toast.error("Domain is required")
-      return
-    }
     const selectedChannel = channels?.find(
       (c: { id: string; name: string }) => c.id === channelId
     )
-    const payload: SaveSettingsPayload = {
-      name: projectName,
-      domain,
+    const rawPayload = {
+      name: projectName.trim(),
+      domain: domain.trim(),
       widget: {
         primaryColor,
         position,
@@ -90,10 +109,35 @@ export default function SettingsPage() {
         aiSystemPrompt,
         aiModel,
       },
-      ...(channelId && {
+      ...(channelId.trim() && {
         discord: {
-          channelId,
+          channelId: channelId.trim(),
           channelName: selectedChannel?.name,
+        },
+      }),
+    }
+
+    const parsed = settingsFormSchema.safeParse({
+      ...rawPayload,
+      domain: normalizeDomainForValidation(rawPayload.domain),
+    })
+
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]
+      const msg =
+        firstError?.message ?? "Please check the form and try again."
+      toast.error(msg)
+      return
+    }
+
+    const payload: SaveSettingsPayload = {
+      name: parsed.data.name,
+      domain: parsed.data.domain.replace(/^https?:\/\//i, "").trim(),
+      widget: parsed.data.widget,
+      ...(parsed.data.discord?.channelId && {
+        discord: {
+          channelId: parsed.data.discord.channelId,
+          channelName: parsed.data.discord.channelName,
         },
       }),
     }
@@ -123,6 +167,10 @@ export default function SettingsPage() {
     selectGuild.mutate(guild, {
       onSuccess: () => setShowGuildPicker(false),
     })
+  }
+
+  if (settingsLoading || !settings) {
+    return <SettingsLoadingSkeleton />
   }
 
   return (

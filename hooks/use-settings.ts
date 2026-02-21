@@ -162,8 +162,8 @@ export function useSelectGuild(projectId: string | undefined) {
       })
       if (!res.ok) throw new Error()
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["settings", projectId] })
+    onSuccess: async (_, variables) => {
+      await queryClient.refetchQueries({ queryKey: ["settings", projectId] })
       toast.success(`Connected to ${variables.name}!`)
     },
     onError: () => {
