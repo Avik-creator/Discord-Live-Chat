@@ -1,7 +1,7 @@
 import { google } from "@ai-sdk/google"
 import { embed, embedMany } from "ai"
 
-const EMBEDDING_MODEL = "text-embedding-004"
+const EMBEDDING_MODEL = "gemini-embedding-001"
 const DIMENSIONS = 768
 
 /**
