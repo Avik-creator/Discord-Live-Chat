@@ -1,7 +1,7 @@
 /**
  * Chunking and retrieval for crawled site content.
- * Chunks are stored in Redis (and optionally Upstash Vector) so the AI
- * receives only relevant chunks per query instead of the full dump.
+ * Chunks are stored in Redis so the AI receives only relevant chunks
+ * per query instead of the full dump.
  */
 
 const CHUNK_SIZE = 500
@@ -87,7 +87,7 @@ function fixedSizeChunks(
 
 /**
  * Score a chunk by how many query terms (words) it contains.
- * Returns a simple relevance score for keyword fallback when Vector is not used.
+ * Returns a simple relevance score for keyword-based retrieval.
  */
 function keywordScore(chunkText: string, query: string): number {
   const words = query
@@ -106,8 +106,7 @@ function keywordScore(chunkText: string, query: string): number {
 
 /**
  * Get only the chunks relevant to the current query.
- * Uses Upstash Vector semantic search when configured, otherwise
- * Redis-stored chunks + keyword scoring.
+ * Uses Redis-stored chunks with keyword scoring for relevance matching.
  */
 export async function getRelevantSiteContext(
   projectId: string,
@@ -138,52 +137,8 @@ export async function getRelevantSiteContext(
   const queryTrimmed = query.trim()
   let selected: SiteChunk[] = []
 
-  if (
-    process.env.UPSTASH_VECTOR_REST_URL &&
-    process.env.UPSTASH_VECTOR_REST_TOKEN &&
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY &&
-    queryTrimmed.length > 0
-  ) {
-    try {
-      const { embedQuery } = await import("@/lib/embeddings")
-      const { Index } = await import("@upstash/vector")
-      const index = new Index()
-      const namespace = `project_${projectId}`
-
-      const queryVector = await embedQuery(queryTrimmed)
-      const results = await index.query({
-        vector: queryVector,
-        topK,
-        includeMetadata: true,
-      }, { namespace } as { namespace: string })
-
-      if (results && results.length > 0) {
-        // Prefer matching against Redis chunks by ID
-        const idSet = new Set(results.map((r) => r.id))
-        selected = chunks.filter((c) => idSet.has(c.id))
-        // Fallback: use text stored in metadata if Redis chunks don't match
-        if (selected.length === 0) {
-          selected = results
-            .filter(
-              (r) =>
-                r.metadata &&
-                typeof (r.metadata as { text?: string }).text === "string" &&
-                typeof r.id === "string"
-            )
-            .map((r) => ({
-              id: r.id as string,
-              text: (r.metadata as { text: string }).text,
-              url: (r.metadata as { url?: string })?.url ?? "",
-              title: (r.metadata as { title?: string })?.title ?? "",
-            }))
-        }
-      }
-    } catch (err) {
-      console.error("[bridgecord] Vector query failed, falling back to keyword:", err)
-    }
-  }
-
-  if (selected.length === 0 && queryTrimmed.length > 0) {
+  // Use keyword scoring for relevance matching
+  if (queryTrimmed.length > 0) {
     const scored = chunks.map((c) => ({
       chunk: c,
       score: keywordScore(c.text, queryTrimmed),
@@ -195,6 +150,7 @@ export async function getRelevantSiteContext(
       .map((s) => s.chunk)
   }
 
+  // Fallback: return first N chunks if no keyword matches
   if (selected.length === 0) {
     selected = chunks.slice(0, topK)
   }

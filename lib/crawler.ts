@@ -2,14 +2,14 @@
  * Site crawler utility.
  *
  * Crawls a domain's pages, extracts clean text content, chunks it, and caches
- * in Upstash Redis (and optionally Upstash Vector for semantic retrieval).
- * The AI receives only relevant chunks per query instead of the full dump.
+ * in Upstash Redis. The AI receives only relevant chunks per query instead
+ * of the full dump.
  *
  * Flow:
  * 1. Try to find /sitemap.xml -- parse URLs from it.
  * 2. If no sitemap, fall back to crawling the homepage and extracting internal links.
  * 3. Fetch each page, strip HTML to plain text, chunk with overlap.
- * 4. Store chunks in Redis; if UPSTASH_VECTOR_* is set, upsert to Vector for semantic search.
+ * 4. Store chunks in Redis for keyword-based retrieval.
  */
 
 import { Redis } from "@upstash/redis"
@@ -210,38 +210,6 @@ export async function crawlSite(
 
   const chunksKey = `${CACHE_PREFIX}${projectId}:chunks`
   await redis.set(chunksKey, JSON.stringify(allChunks), { ex: CACHE_TTL })
-
-  if (
-    process.env.UPSTASH_VECTOR_REST_URL &&
-    process.env.UPSTASH_VECTOR_REST_TOKEN &&
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY
-  ) {
-    try {
-      const { embedChunks } = await import("@/lib/embeddings")
-      const { Index } = await import("@upstash/vector")
-      const index = new Index()
-      const namespace = `project_${projectId}`
-
-      // Batch embed all chunks with Google text-embedding-004
-      const texts = allChunks.map((c) => c.text)
-      const BATCH = 50
-      for (let i = 0; i < texts.length; i += BATCH) {
-        const batch = allChunks.slice(i, i + BATCH)
-        const batchTexts = texts.slice(i, i + BATCH)
-        const vectors = await embedChunks(batchTexts)
-        await index.upsert(
-          batch.map((c, j) => ({
-            id: c.id,
-            vector: vectors[j],
-            metadata: { url: c.url, title: c.title, text: c.text },
-          })),
-          { namespace } as { namespace: string }
-        )
-      }
-    } catch (err) {
-      console.error("[bridgecord] Vector upsert failed:", err)
-    }
-  }
 
   const metaKey = `${CACHE_PREFIX}${projectId}:meta`
   const meta: CrawlResult = {
