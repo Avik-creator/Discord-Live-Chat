@@ -213,19 +213,28 @@ export async function crawlSite(
 
   if (
     process.env.UPSTASH_VECTOR_REST_URL &&
-    process.env.UPSTASH_VECTOR_REST_TOKEN
+    process.env.UPSTASH_VECTOR_REST_TOKEN &&
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY
   ) {
     try {
+      const { embedChunks } = await import("@/lib/embeddings")
       const { Index } = await import("@upstash/vector")
       const index = new Index()
       const namespace = `project_${projectId}`
-      for (const c of allChunks) {
+
+      // Batch embed all chunks with Google text-embedding-004
+      const texts = allChunks.map((c) => c.text)
+      const BATCH = 50
+      for (let i = 0; i < texts.length; i += BATCH) {
+        const batch = allChunks.slice(i, i + BATCH)
+        const batchTexts = texts.slice(i, i + BATCH)
+        const vectors = await embedChunks(batchTexts)
         await index.upsert(
-          {
+          batch.map((c, j) => ({
             id: c.id,
-            data: c.text,
-            metadata: { url: c.url, title: c.title },
-          },
+            vector: vectors[j],
+            metadata: { url: c.url, title: c.title, text: c.text },
+          })),
           { namespace } as { namespace: string }
         )
       }

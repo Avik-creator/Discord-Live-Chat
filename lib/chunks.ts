@@ -141,37 +141,38 @@ export async function getRelevantSiteContext(
   if (
     process.env.UPSTASH_VECTOR_REST_URL &&
     process.env.UPSTASH_VECTOR_REST_TOKEN &&
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY &&
     queryTrimmed.length > 0
   ) {
     try {
+      const { embedQuery } = await import("@/lib/embeddings")
       const { Index } = await import("@upstash/vector")
       const index = new Index()
       const namespace = `project_${projectId}`
+
+      const queryVector = await embedQuery(queryTrimmed)
       const results = await index.query({
-        data: queryTrimmed,
+        vector: queryVector,
         topK,
         includeMetadata: true,
-        includeData: true,
       }, { namespace } as { namespace: string })
 
       if (results && results.length > 0) {
+        // Prefer matching against Redis chunks by ID
         const idSet = new Set(results.map((r) => r.id))
         selected = chunks.filter((c) => idSet.has(c.id))
-        if (
-          selected.length === 0 &&
-          results[0].metadata &&
-          typeof results[0].id === "string"
-        ) {
+        // Fallback: use text stored in metadata if Redis chunks don't match
+        if (selected.length === 0) {
           selected = results
             .filter(
               (r) =>
-                r.data &&
-                typeof r.data === "string" &&
+                r.metadata &&
+                typeof (r.metadata as { text?: string }).text === "string" &&
                 typeof r.id === "string"
             )
             .map((r) => ({
               id: r.id as string,
-              text: r.data as string,
+              text: (r.metadata as { text: string }).text,
               url: (r.metadata as { url?: string })?.url ?? "",
               title: (r.metadata as { title?: string })?.title ?? "",
             }))

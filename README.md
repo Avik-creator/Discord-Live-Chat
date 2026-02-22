@@ -86,6 +86,13 @@ DISCORD_BOT_TOKEN=your-discord-bot-token
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Google AI Embeddings (for semantic search of crawled content)
+GOOGLE_GENERATIVE_AI_API_KEY=your-google-ai-api-key
+
+# Upstash Vector (optional — enables semantic search, requires Google AI key above)
+UPSTASH_VECTOR_REST_URL=your-upstash-vector-url
+UPSTASH_VECTOR_REST_TOKEN=your-upstash-vector-token
 ```
 
 ### 4. Set up the database
