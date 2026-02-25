@@ -206,10 +206,31 @@ export function AITab({
                 </div>
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground">
-              Cached for 1 hour. The AI uses this content alongside the system
-              prompt and conversation history when replying.
-            </p>
+            {crawlMeta?.crawledAt && (
+              <>
+                <p className="text-[10px] text-muted-foreground">
+                  Cached for{" "}
+                  {(() => {
+                    const cachedAt = new Date(crawlMeta.crawledAt).getTime()
+                    const expiresAt = cachedAt + 3600 * 1000
+                    const remaining = Math.max(0, expiresAt - Date.now())
+                    const minutes = Math.floor(remaining / 1000 / 60)
+                    if (minutes < 1) return "less than a minute"
+                    if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""}`
+                    const hours = Math.floor(minutes / 60)
+                    return `${hours} hour${hours > 1 ? "s" : ""}`
+                  })()}.
+                  The AI uses this content alongside the system prompt and
+                  conversation history when replying.
+                </p>
+              </>
+            )}
+            {!crawlMeta?.crawledAt && (
+              <p className="text-[10px] text-muted-foreground">
+                The AI uses this content alongside the system prompt and
+                conversation history when replying.
+              </p>
+            )}
           </div>
           <div className="border border-border bg-muted/30 p-4">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
