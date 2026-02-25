@@ -14,6 +14,8 @@
 
 import { Redis } from "@upstash/redis"
 import { chunkText, type SiteChunk } from "@/lib/chunks"
+import { generateEmbedding, generateEmbeddings } from "@/lib/embeddings"
+import { index } from "@/lib/vector-store"
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -22,9 +24,12 @@ const redis = new Redis({
 
 const CACHE_PREFIX = "bridgecord:site:"
 const CACHE_TTL = 3600 // 1 hour
-const MAX_PAGES = 15 // Max pages to crawl
+const MAX_PAGES = 30 // Max pages to crawl
 const MAX_CHARS_PER_PAGE = 4000 // Per page before truncation (then chunked)
-const MAX_TOTAL_CHARS = 50000 // Total raw text across pages before we stop adding
+const MAX_TOTAL_CHARS = 80000 // Total raw text across pages before we stop adding
+const MAX_CONCURRENT = 3 // Limit concurrent requests
+const MAX_RETRIES = 2 // Retry failed requests
+const CRAWL_DELAY_MS = 500 // Delay between batches
 
 export interface CrawlResult {
   pages: { url: string; title: string; charCount: number }[]
@@ -110,25 +115,102 @@ function extractInternalLinks(html: string, baseUrl: string): string[] {
 }
 
 /**
- * Fetch a URL with a timeout. Returns null on failure.
+ * Normalize URL - remove fragments, trailing slashes, and query params that aren't meaningful
+ */
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    // Remove trailing slash (except for root)
+    let path = parsed.pathname.replace(/\/+$/, "") || "/"
+    // Keep only essential query params (like ?lang=en)
+    const importantParams = ["lang", "locale", "language"]
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of parsed.searchParams) {
+      if (importantParams.includes(key.toLowerCase())) {
+        searchParams.append(key, value)
+      }
+    }
+    return `${parsed.origin}${path}${searchParams.toString() ? "?" + searchParams.toString() : ""}`
+  } catch {
+    return url
+  }
+}
+
+/**
+ * Check if URL is allowed by robots.txt
+ */
+const robotsCache = new Map<string, Set<string>>()
+async function isAllowedByRobots(url: string): Promise<boolean> {
+  const origin = new URL(url).origin
+  const robotsUrl = `${origin}/robots.txt`
+  
+  let disallowed: Set<string>
+  if (robotsCache.has(origin)) {
+    disallowed = robotsCache.get(origin)!
+  } else {
+    try {
+      const res = await fetch(robotsUrl, { headers: { "User-Agent": "Bridgecord-Crawler/1.0" } })
+      if (!res.ok) {
+        disallowed = new Set()
+      } else {
+        const text = await res.text()
+        disallowed = new Set()
+        const lines = text.split("\n")
+        let userAgent = ""
+        for (const line of lines) {
+          const trimmed = line.trim().toLowerCase()
+          if (trimmed.startsWith("user-agent:")) {
+            userAgent = trimmed.substring(11).trim()
+          } else if (trimmed.startsWith("disallow:") && (userAgent === "" || userAgent === "bridgecord-crawler/1.0" || userAgent === "*")) {
+            const path = trimmed.substring(9).trim()
+            if (path) disallowed.add(path)
+          }
+        }
+      }
+      robotsCache.set(origin, disallowed)
+    } catch {
+      disallowed = new Set()
+      robotsCache.set(origin, disallowed)
+    }
+  }
+  
+  const path = new URL(url).pathname
+  for (const disallow of disallowed) {
+    if (path.startsWith(disallow)) return false
+  }
+  return true
+}
+
+/**
+ * Fetch a URL with timeout and retry logic. Returns null on failure.
  */
 async function safeFetch(url: string, timeoutMs = 8000): Promise<string | null> {
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Bridgecord-Crawler/1.0",
-        Accept: "text/html, application/xml, text/xml",
-      },
-    })
-    clearTimeout(timer)
-    if (!res.ok) return null
-    return await res.text()
-  } catch {
+  // Check robots.txt first
+  if (!(await isAllowedByRobots(url))) {
     return null
   }
+  
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Bridgecord-Crawler/1.0",
+          Accept: "text/html, application/xml, text/xml",
+        },
+      })
+      clearTimeout(timer)
+      if (!res.ok) return null
+      return await res.text()
+    } catch {
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+      }
+    }
+  }
+  return null
 }
 
 /**
@@ -143,12 +225,23 @@ export async function crawlSite(
   const baseUrl = domain.startsWith("http") ? domain : `https://${domain}`
   const origin = new URL(baseUrl).origin
 
-  // 1. Try to find pages via sitemap
+  // 1. Try to find pages via sitemap (including sitemap index)
   let pageUrls: string[] = []
 
   const sitemapXml = await safeFetch(`${origin}/sitemap.xml`)
   if (sitemapXml && sitemapXml.includes("<loc>")) {
-    pageUrls = parseSitemap(sitemapXml)
+    // Check if it's a sitemap index
+    if (sitemapXml.includes("<sitemapindex")) {
+      const sitemapUrls = parseSitemap(sitemapXml)
+      for (const smUrl of sitemapUrls.slice(0, 5)) {
+        const smContent = await safeFetch(smUrl)
+        if (smContent) {
+          pageUrls.push(...parseSitemap(smContent))
+        }
+      }
+    } else {
+      pageUrls = parseSitemap(sitemapXml)
+    }
   }
 
   // 2. If no sitemap, crawl the homepage and extract links
@@ -159,36 +252,44 @@ export async function crawlSite(
     }
   }
 
-  // Deduplicate and limit
-  pageUrls = [...new Set(pageUrls)].slice(0, MAX_PAGES)
+  // Deduplicate, normalize, and limit
+  pageUrls = [...new Set(pageUrls.map(normalizeUrl))].slice(0, MAX_PAGES)
 
-  // 3. Fetch each page and extract text
+  // 3. Fetch each page and extract text (with concurrency limit)
   const pages: { url: string; title: string; text: string; charCount: number }[] = []
   let totalChars = 0
 
-  const fetchPromises = pageUrls.map(async (url) => {
-    const html = await safeFetch(url)
-    if (!html) return null
+  for (let i = 0; i < pageUrls.length; i += MAX_CONCURRENT) {
+    const batch = pageUrls.slice(i, i + MAX_CONCURRENT)
+    
+    const fetchPromises = batch.map(async (url) => {
+      const html = await safeFetch(url)
+      if (!html) return null
 
-    const title = extractTitle(html) || url
-    let text = htmlToText(html)
-    if (text.length > MAX_CHARS_PER_PAGE) {
-      text = text.slice(0, MAX_CHARS_PER_PAGE) + "..."
+      const title = extractTitle(html) || url
+      let text = htmlToText(html)
+      if (text.length > MAX_CHARS_PER_PAGE) {
+        text = text.slice(0, MAX_CHARS_PER_PAGE) + "..."
+      }
+
+      return { url, title, text, charCount: text.length }
+    })
+
+    const results = await Promise.all(fetchPromises)
+    for (const result of results) {
+      if (!result || totalChars >= MAX_TOTAL_CHARS) continue
+      if (totalChars + result.charCount > MAX_TOTAL_CHARS) {
+        result.text = result.text.slice(0, MAX_TOTAL_CHARS - totalChars) + "..."
+        result.charCount = result.text.length
+      }
+      pages.push(result)
+      totalChars += result.charCount
     }
 
-    return { url, title, text, charCount: text.length }
-  })
-
-  const results = await Promise.all(fetchPromises)
-  for (const result of results) {
-    if (!result || totalChars >= MAX_TOTAL_CHARS) continue
-    // Truncate if adding this page would exceed total limit
-    if (totalChars + result.charCount > MAX_TOTAL_CHARS) {
-      result.text = result.text.slice(0, MAX_TOTAL_CHARS - totalChars) + "..."
-      result.charCount = result.text.length
+    // Add delay between batches to be respectful
+    if (i + MAX_CONCURRENT < pageUrls.length) {
+      await new Promise((r) => setTimeout(r, CRAWL_DELAY_MS))
     }
-    pages.push(result)
-    totalChars += result.charCount
   }
 
   // 4. Chunk each page's text and collect all chunks
@@ -204,6 +305,38 @@ export async function crawlSite(
         title: p.title,
       })
     })
+  }
+
+  // 5. Clear old vectors and generate new embeddings
+  if (allChunks.length > 0) {
+    try {
+      const namespace = `crawl:${projectId}`
+      
+      // Delete old vectors for this project
+      try {
+        await index.delete({ filter: `projectId = "${projectId}"` }, { namespace })
+      } catch {
+        // Index may be empty, continue
+      }
+
+      const texts = allChunks.map((c) => c.text)
+      const embeddings = await generateEmbeddings(texts)
+
+      const vectors = allChunks.map((chunk, i) => ({
+        id: chunk.id,
+        vector: embeddings[i],
+        metadata: {
+          text: chunk.text,
+          url: chunk.url,
+          title: chunk.title,
+          projectId,
+        } as Record<string, unknown>,
+      }))
+
+      await index.upsert(vectors as Parameters<typeof index.upsert>[0], { namespace })
+    } catch (err) {
+      console.error("[bridgecord] Failed to generate embeddings:", err)
+    }
   }
 
   const crawledAt = new Date().toISOString()
@@ -291,5 +424,42 @@ export async function getCrawlMeta(
     return typeof raw === "string" ? JSON.parse(raw) : (raw as CrawlResult)
   } catch {
     return null
+  }
+}
+
+export interface CrawlSearchResult {
+  id: string
+  text: string
+  url: string
+  title: string
+  score: number
+}
+
+export async function searchCrawledContent(
+  projectId: string,
+  query: string,
+  limit: number = 5
+): Promise<CrawlSearchResult[]> {
+  try {
+    const queryEmbedding = await generateEmbedding(query)
+    const namespace = `crawl:${projectId}`
+
+    const results = await index.query({
+      vector: queryEmbedding,
+      topK: limit,
+      includeVectors: false,
+      includeMetadata: true,
+    })
+
+    return results.map((r) => ({
+      id: String(r.id),
+      text: (r.metadata as { text?: string })?.text ?? "",
+      url: (r.metadata as { url?: string })?.url ?? "",
+      title: (r.metadata as { title?: string })?.title ?? "",
+      score: r.score,
+    }))
+  } catch (err) {
+    console.error("[bridgecord] Search failed:", err)
+    return []
   }
 }
