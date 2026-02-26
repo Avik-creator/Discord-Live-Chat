@@ -13,10 +13,10 @@ export function corsHeadersStream() {
   return corsHeaders(STREAM_METHODS)
 }
 
-export function withCors<T>(
-  response: NextResponse | Response,
+export function withCors(
+  response: Response,
   methods: string = DEFAULT_METHODS
-): NextResponse | Response {
+): Response {
   const headers = new Headers(response.headers)
   Object.entries(corsHeaders(methods)).forEach(([k, v]) => headers.set(k, v))
   return new Response(response.body, {

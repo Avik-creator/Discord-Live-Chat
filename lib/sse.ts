@@ -61,7 +61,7 @@ export async function pollMessages(
 
   // Fetch all messages with score > afterTimestamp
   // Using (afterTimestamp means exclusive lower bound
-  const raw = await redis.zremrangebyscore(key, afterTimestamp + 1, "+inf")
+  const raw = await redis.zrange(key, afterTimestamp + 1, "+inf", { byScore: true })
 
   const results: Record<string, unknown>[] = []
 
