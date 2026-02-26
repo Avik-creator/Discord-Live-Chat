@@ -233,18 +233,25 @@ export async function getWorkspaceInfo(
  * Generate the Slack OAuth URL for installing the app to a workspace
  * 
  * Required scopes for the bot:
- * - channels:read - List public channels
- * - channels:history - Read messages in channels
- * - chat:write - Send messages
- * - users:read - Get user info for author names
+ * - channels:read       - List public channels
+ * - channels:history    - Read messages in public channels
+ * - chat:write          - Send messages as bot
+ * - chat:write.public   - Post to public channels without joining
+ * - groups:read         - List private channels
+ * - groups:history      - Read messages in private channels
+ * - users:read          - Get user info for author names
+ * - reactions:write     - Add emoji reactions to messages
  */
 export function getSlackInstallUrl(projectId: string, redirectUri: string): string {
   const scopes = [
     "channels:read",
     "channels:history",
     "chat:write",
+    "chat:write.public",
+    "groups:read",
+    "groups:history",
     "users:read",
-  ].join(",")
+    "reactions:write",
 
   const params = new URLSearchParams({
     client_id: process.env.SLACK_CLIENT_ID!,
