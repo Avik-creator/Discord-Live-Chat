@@ -252,7 +252,7 @@ export function getSlackInstallUrl(projectId: string, redirectUri: string): stri
     "groups:history",
     "users:read",
     "reactions:write",
-
+  ].join(",")
   const params = new URLSearchParams({
     client_id: process.env.SLACK_CLIENT_ID!,
     scope: scopes,
