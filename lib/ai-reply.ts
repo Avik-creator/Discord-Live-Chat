@@ -5,23 +5,24 @@ import {
   messages,
   conversations,
   widgetConfigs,
+  slackConfigs,
 } from "@/lib/db/schema"
 import { eq, asc, and } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { sseBus } from "@/lib/sse"
 import { sendThreadMessage } from "@/lib/discord"
+import { sendSlackMessage } from "@/lib/slack"
 import { getRelevantSiteContext } from "@/lib/chunks"
 
 /**
  * Generates an AI auto-reply for a visitor message in a conversation.
- * Also posts the reply to Discord so human agents can see it.
+ * Posts the reply to both Discord and Slack so human agents can see it.
  * Returns the AI message ID, or null if AI is not enabled.
  */
 export async function generateAIReply(
   conversationId: string,
   projectId: string
 ): Promise<string | null> {
-  // 1. Check if AI is enabled for this project
   const [widget] = await db
     .select()
     .from(widgetConfigs)
@@ -35,7 +36,6 @@ export async function generateAIReply(
   const rawModelId = widget.aiModel || "llama-3.3-70b-versatile"
   const modelId = rawModelId.startsWith("groq/") ? rawModelId.slice(5) : rawModelId
 
-  // 2. Fetch conversation + history
   const [conversation] = await db
     .select()
     .from(conversations)
@@ -59,13 +59,11 @@ export async function generateAIReply(
 
   if (history.length === 0) return null
 
-  // 3. Build message array for the model
   const modelMessages = history.map((msg) => ({
     role: msg.sender === "visitor" ? ("user" as const) : ("assistant" as const),
     content: msg.content,
   }))
 
-  // 4. Fetch only chunks relevant to the last visitor message(s)
   const query = modelMessages
     .filter((m) => m.role === "user")
     .slice(-2)
@@ -82,7 +80,6 @@ export async function generateAIReply(
     console.error("[bridgecord] Failed to fetch site context:", err)
   }
 
-  // 5. Generate AI response
   let aiText: string
   try {
     const result = await generateText({
@@ -98,7 +95,6 @@ export async function generateAIReply(
 
   if (!aiText || aiText.trim().length === 0) return null
 
-  // Strip <think>…</think> reasoning blocks the model may emit
   const trimmed = aiText
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .trim()
@@ -107,8 +103,8 @@ export async function generateAIReply(
 
   const msgId = nanoid(12)
   let discordMessageId: string | null = null
+  let slackMessageTs: string | null = null
 
-  // 6. Post AI reply to Discord thread so agents can see it
   if (conversation.discordThreadId) {
     try {
       const discordPrefix = "🤖 **AI Auto-Reply:**\n"
@@ -128,23 +124,49 @@ export async function generateAIReply(
     }
   }
 
-  // 7. Save AI message to DB
+  if (conversation.slackThreadTs) {
+    try {
+      const [slackConfig] = await db
+        .select()
+        .from(slackConfigs)
+        .where(eq(slackConfigs.projectId, projectId))
+
+      if (slackConfig?.channelId) {
+        const slackPrefix = "🤖 *AI Auto-Reply:*\n"
+        const maxLen = 3000 - slackPrefix.length
+        const slackBody =
+          trimmed.length > maxLen
+            ? trimmed.slice(0, maxLen - 1) + "…"
+            : trimmed
+        const result = await sendSlackMessage(
+          slackConfig.botToken,
+          slackConfig.channelId,
+          conversation.slackThreadTs,
+          `${slackPrefix}${slackBody}`,
+          "AI Assistant"
+        )
+        slackMessageTs = result.messageTs
+      }
+    } catch (err) {
+      console.error("[bridgecord] AI Slack post failed:", err)
+    }
+  }
+
   await db.insert(messages).values({
     id: msgId,
     conversationId,
     sender: "agent",
     content: trimmed,
     discordMessageId,
+    slackMessageTs,
     createdAt: new Date(),
   })
 
-  // 8. Update conversation timestamp
   await db
     .update(conversations)
     .set({ updatedAt: new Date() })
     .where(eq(conversations.id, conversationId))
 
-  // 9. Push to SSE/Redis so the widget gets it instantly
   sseBus.emit(conversationId, {
     type: "new_message",
     message: {
@@ -153,6 +175,7 @@ export async function generateAIReply(
       sender: "agent",
       content: trimmed,
       discordMessageId,
+      slackMessageTs,
       createdAt: new Date().toISOString(),
     },
   })

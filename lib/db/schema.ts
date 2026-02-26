@@ -96,6 +96,21 @@ export const discordConfigs = pgTable("discord_configs", {
   channelName: text("channel_name"),
 })
 
+export const slackConfigs = pgTable("slack_configs", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .unique()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  workspaceId: text("workspace_id").notNull(),
+  workspaceName: text("workspace_name").notNull(),
+  channelId: text("channel_id"),
+  channelName: text("channel_name"),
+  botToken: text("bot_token").notNull(), // xoxb-... token from OAuth
+  botUserId: text("bot_user_id"), // Bot's user ID to filter its own messages
+})
+
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -107,6 +122,7 @@ export const conversations = pgTable(
     visitorName: text("visitor_name"),
     visitorEmail: text("visitor_email"),
     discordThreadId: text("discord_thread_id"),
+    slackThreadTs: text("slack_thread_ts"), // Slack thread timestamp
     status: text("status").notNull().default("open"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -124,5 +140,6 @@ export const messages = pgTable("messages", {
   sender: text("sender").notNull(), // "visitor" | "agent"
   content: text("content").notNull(),
   discordMessageId: text("discord_message_id"),
+  slackMessageTs: text("slack_message_ts"), // Slack message timestamp
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })

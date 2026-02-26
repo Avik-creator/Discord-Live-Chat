@@ -17,6 +17,7 @@ export type SettingsFormState = {
   aiSystemPrompt: string
   aiModel: string
   channelId: string
+  slackChannelId: string
   showGuildPicker: boolean
 }
 
@@ -32,6 +33,7 @@ const getInitialState = (): SettingsFormState => ({
   aiSystemPrompt: DEFAULT_AI_PROMPT,
   aiModel: DEFAULT_GROQ_MODEL_ID,
   channelId: "",
+  slackChannelId: "",
   showGuildPicker: false,
 })
 
@@ -47,6 +49,7 @@ type SettingsStore = SettingsFormState & {
   setAiSystemPrompt: (v: string) => void
   setAiModel: (v: string) => void
   setChannelId: (v: string) => void
+  setSlackChannelId: (v: string) => void
   setShowGuildPicker: (v: boolean) => void
   hydrate: (settings: SettingsData | null) => void
   reset: () => void
@@ -66,6 +69,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setAiSystemPrompt: (aiSystemPrompt) => set({ aiSystemPrompt }),
   setAiModel: (aiModel) => set({ aiModel }),
   setChannelId: (channelId) => set({ channelId }),
+  setSlackChannelId: (slackChannelId) => set({ slackChannelId }),
   setShowGuildPicker: (showGuildPicker) => set({ showGuildPicker }),
 
   hydrate: (settings) => {
@@ -85,6 +89,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       aiSystemPrompt: settings.widget?.aiSystemPrompt || DEFAULT_AI_PROMPT,
       aiModel: getValidGroqModelId(settings.widget?.aiModel),
       channelId: settings.discord?.channelId || "",
+      slackChannelId: settings.slack?.channelId || "",
     })
   },
 

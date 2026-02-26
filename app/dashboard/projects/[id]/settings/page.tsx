@@ -18,6 +18,7 @@ import { GeneralTab } from "@/components/settings/general-tab"
 import { DiscordTab } from "@/components/settings/discord-tab"
 import { WidgetTab } from "@/components/settings/widget-tab"
 import { AITab } from "@/components/settings/ai-tab"
+import { SlackTab } from "@/components/settings/slack-tab"
 import { useSettingsStore } from "@/stores/settings-store"
 import { settingsFormSchema } from "@/lib/validations/settings"
 
@@ -52,11 +53,27 @@ export default function SettingsPage() {
       toast.success("Discord server connected!")
     }
   }, [searchParams, id, queryClient])
+
+  // Handle Slack connection success
+  useEffect(() => {
+    if (searchParams.get("slack") === "connected" && id) {
+      queryClient.invalidateQueries({ queryKey: ["settings", id] })
+      toast.success("Slack workspace connected!")
+    }
+  }, [searchParams, id, queryClient])
   const { data: channels } = useQuery({
     queryKey: ["channels", id, settings?.discord?.guildId],
     queryFn: () =>
       fetch(`/api/projects/${id}/discord/channels`).then((r) => r.json()),
     enabled: !!id && !!settings?.discord?.guildId,
+  })
+
+  // Fetch Slack channels
+  const { data: slackChannels } = useQuery({
+    queryKey: ["slackChannels", id, settings?.slack?.workspaceId],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/slack/channels`).then((r) => r.json()),
+    enabled: !!id && !!settings?.slack?.workspaceId,
   })
   const { data: crawlMeta } = useCrawlMeta(id)
   const crawlSite = useCrawlSite(id)
@@ -84,6 +101,8 @@ export default function SettingsPage() {
     setAiModel,
     channelId,
     setChannelId,
+    slackChannelId,
+    setSlackChannelId,
     hydrate,
   } = useSettingsStore()
 
@@ -115,6 +134,14 @@ export default function SettingsPage() {
           channelName: selectedChannel?.name,
         },
       }),
+      ...(slackChannelId.trim() && {
+        slack: {
+          channelId: slackChannelId.trim(),
+          channelName: slackChannels?.find(
+            (c: { id: string; name: string }) => c.id === slackChannelId
+          )?.name,
+        },
+      }),
     }
 
     const parsed = settingsFormSchema.safeParse(rawPayload)
@@ -137,6 +164,12 @@ export default function SettingsPage() {
           channelName: parsed.data.discord.channelName,
         },
       }),
+      ...(parsed.data.slack?.channelId && {
+        slack: {
+          channelId: parsed.data.slack.channelId,
+          channelName: parsed.data.slack.channelName,
+        },
+      }),
     }
     saveSettings.mutate(payload)
   }
@@ -148,6 +181,16 @@ export default function SettingsPage() {
       window.location.href = data.url
     } catch {
       toast.error("Failed to generate Discord invite link")
+    }
+  }
+
+  const handleOpenSlackInstall = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/slack`)
+      const data = await res.json()
+      window.location.href = data.url
+    } catch {
+      toast.error("Failed to generate Slack install link")
     }
   }
 
@@ -171,6 +214,9 @@ export default function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger value="ai" className="text-xs">
               AI Auto-Reply
+            </TabsTrigger>
+            <TabsTrigger value="slack" className="text-xs">
+              Slack
             </TabsTrigger>
           </TabsList>
 
@@ -200,6 +246,16 @@ export default function SettingsPage() {
             channelId={channelId}
             setChannelId={setChannelId}
             onOpenBotInvite={handleOpenBotInvite}
+          />
+        </TabsContent>
+
+        <TabsContent value="slack" className="space-y-6">
+          <SlackTab
+            slack={settings?.slack ?? null}
+            channels={slackChannels}
+            channelId={slackChannelId}
+            setChannelId={setSlackChannelId}
+            onOpenSlackInstall={handleOpenSlackInstall}
           />
         </TabsContent>
 

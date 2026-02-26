@@ -1,6 +1,6 @@
 import { requireAuth, requireProject } from "@/lib/api/auth"
 import { db } from "@/lib/db"
-import { projects, widgetConfigs, discordConfigs } from "@/lib/db/schema"
+import { projects, widgetConfigs, discordConfigs, slackConfigs } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
@@ -34,7 +34,21 @@ export async function GET(
       }
     : null
 
-  return NextResponse.json({ project, widget: widget || null, discord })
+  const [slackRow] = await db
+    .select()
+    .from(slackConfigs)
+    .where(eq(slackConfigs.projectId, id))
+
+  const slack = slackRow
+    ? {
+        workspaceId: slackRow.workspaceId,
+        workspaceName: slackRow.workspaceName,
+        channelId: slackRow.channelId ?? null,
+        channelName: slackRow.channelName ?? null,
+      }
+    : null
+
+  return NextResponse.json({ project, widget: widget || null, discord, slack })
 }
 
 /** PUT: Update project settings */
@@ -86,6 +100,17 @@ export async function PUT(
         channelName: body.discord.channelName || null,
       })
       .where(eq(discordConfigs.projectId, id))
+  }
+
+  // Update slack channel selection
+  if (body.slack?.channelId) {
+    await db
+      .update(slackConfigs)
+      .set({
+        channelId: body.slack.channelId,
+        channelName: body.slack.channelName || null,
+      })
+      .where(eq(slackConfigs.projectId, id))
   }
 
   return NextResponse.json({ success: true })

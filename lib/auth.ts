@@ -14,6 +14,10 @@ export const auth = betterAuth({
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
       scope: ["identify", "email", "guilds"],
     },
+    slack: {
+      clientId: process.env.SLACK_CLIENT_ID!,
+      clientSecret: process.env.SLACK_CLIENT_SECRET!,
+    },
   },
   plugins: [nextCookies()],
 })

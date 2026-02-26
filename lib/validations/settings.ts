@@ -46,6 +46,12 @@ export const settingsFormSchema = z.object({
       channelName: z.string().optional(),
     })
     .optional(),
+  slack: z
+    .object({
+      channelId: z.string().min(1),
+      channelName: z.string().optional(),
+    })
+    .optional(),
 })
 
 export type SettingsFormValues = z.infer<typeof settingsFormSchema>

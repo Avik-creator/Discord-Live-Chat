@@ -4,6 +4,7 @@ import {
   conversations,
   messages,
   discordConfigs,
+  slackConfigs,
 } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
 import { NextResponse, after } from "next/server"
@@ -13,6 +14,11 @@ import {
   sendThreadMessage,
   getThreadMessages,
 } from "@/lib/discord"
+import {
+  createSlackThread,
+  sendSlackMessage,
+  getSlackThreadMessages,
+} from "@/lib/slack"
 import { sseBus } from "@/lib/sse"
 import { generateAIReply } from "@/lib/ai-reply"
 
@@ -20,7 +26,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() })
 }
 
-/** GET: Fetch messages + sync from Discord */
+/** GET: Fetch messages + sync from Discord and Slack */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ projectId: string; id: string }> }
@@ -91,6 +97,63 @@ export async function GET(
     }
   }
 
+  // Sync from Slack: fetch new agent replies from the thread
+  if (conversation.slackThreadTs) {
+    try {
+      const [slackConfig] = await db
+        .select()
+        .from(slackConfigs)
+        .where(eq(slackConfigs.projectId, projectId))
+
+      if (slackConfig?.channelId && slackConfig.botUserId) {
+        // Get the last slack message timestamp we have
+        const existingMsgs = await db
+          .select({ slackMessageTs: messages.slackMessageTs })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.conversationId, conversationId),
+              eq(messages.sender, "agent")
+            )
+          )
+          .orderBy(asc(messages.createdAt))
+
+        const lastSlackTs = existingMsgs
+          .filter((m) => m.slackMessageTs)
+          .pop()?.slackMessageTs
+
+        const threadMsgs = await getSlackThreadMessages(
+          slackConfig.botToken,
+          slackConfig.channelId,
+          conversation.slackThreadTs,
+          slackConfig.botUserId,
+          lastSlackTs || undefined
+        )
+
+        // Insert new agent messages
+        for (const msg of threadMsgs) {
+          // Check if we already have this message
+          const [exists] = await db
+            .select({ id: messages.id })
+            .from(messages)
+            .where(eq(messages.slackMessageTs, msg.ts))
+
+          if (!exists) {
+            await db.insert(messages).values({
+              id: nanoid(12),
+              conversationId,
+              sender: "agent",
+              content: msg.content,
+              slackMessageTs: msg.ts,
+            })
+          }
+        }
+      }
+    } catch {
+      // Slack sync failed silently -- still return existing messages
+    }
+  }
+
   // Return all messages
   const allMessages = await db
     .select()
@@ -134,39 +197,38 @@ export async function POST(
     )
   }
 
-  // Get Discord config for this project
-  const [discordConfig] = await db
-    .select()
-    .from(discordConfigs)
-    .where(eq(discordConfigs.projectId, projectId))
+  // Get platform configs for this project (fetch both in parallel)
+  const [discordConfigResult, slackConfigResult] = await Promise.all([
+    db.select().from(discordConfigs).where(eq(discordConfigs.projectId, projectId)),
+    db.select().from(slackConfigs).where(eq(slackConfigs.projectId, projectId)),
+  ])
+
+  const discordConfig = discordConfigResult[0] ?? null
+  const slackConfig = slackConfigResult[0] ?? null
 
   const msgId = nanoid(12)
   let discordMessageId: string | null = null
+  let slackMessageTs: string | null = null
+  const visitorLabel =
+    conversation.visitorName ||
+    `Visitor ${conversation.visitorId.slice(0, 6)}`
+
+  // Track updates needed for conversation
+  const conversationUpdates: Record<string, unknown> = { updatedAt: new Date() }
 
   // Send to Discord
   if (discordConfig?.channelId) {
     try {
       if (!conversation.discordThreadId) {
         // First message: create a thread
-        const visitorLabel =
-          conversation.visitorName ||
-          `Visitor ${conversation.visitorId.slice(0, 6)}`
         const result = await createThread(
           discordConfig.channelId,
           visitorLabel,
           content.trim()
         )
-
-        // Update conversation with thread ID
-        await db
-          .update(conversations)
-          .set({ discordThreadId: result.threadId, updatedAt: new Date() })
-          .where(eq(conversations.id, conversationId))
+        conversationUpdates.discordThreadId = result.threadId
       } else {
         // Subsequent message: post in existing thread
-        const visitorLabel =
-          conversation.visitorName ||
-          `Visitor ${conversation.visitorId.slice(0, 6)}`
         const result = await sendThreadMessage(
           conversation.discordThreadId,
           content.trim(),
@@ -174,10 +236,46 @@ export async function POST(
         )
         discordMessageId = result.messageId
       }
-    } catch {
-      // Discord send failed, but still save the message to DB
+    } catch (err) {
+      console.error("[bridgecord] Discord send failed:", err)
+      // Discord send failed, but continue with other platforms
     }
   }
+
+  // Send to Slack
+  if (slackConfig?.channelId) {
+    try {
+      if (!conversation.slackThreadTs) {
+        // First message: create a thread
+        const result = await createSlackThread(
+          slackConfig.botToken,
+          slackConfig.channelId,
+          visitorLabel,
+          content.trim()
+        )
+        conversationUpdates.slackThreadTs = result.threadTs
+      } else {
+        // Subsequent message: post in existing thread
+        const result = await sendSlackMessage(
+          slackConfig.botToken,
+          slackConfig.channelId,
+          conversation.slackThreadTs,
+          content.trim(),
+          visitorLabel
+        )
+        slackMessageTs = result.messageTs
+      }
+    } catch (err) {
+      console.error("[bridgecord] Slack send failed:", err)
+      // Slack send failed, but continue
+    }
+  }
+
+  // Update conversation with any new thread IDs and timestamp
+  await db
+    .update(conversations)
+    .set(conversationUpdates)
+    .where(eq(conversations.id, conversationId))
 
   // Save message to DB
   await db.insert(messages).values({
@@ -186,13 +284,8 @@ export async function POST(
     sender: "visitor",
     content: content.trim(),
     discordMessageId,
+    slackMessageTs,
   })
-
-  // Update conversation timestamp
-  await db
-    .update(conversations)
-    .set({ updatedAt: new Date() })
-    .where(eq(conversations.id, conversationId))
 
   // Push SSE event to all connected clients for this conversation
   sseBus.emit(conversationId, {
@@ -203,6 +296,7 @@ export async function POST(
       sender: "visitor",
       content: content.trim(),
       discordMessageId,
+      slackMessageTs,
       createdAt: new Date().toISOString(),
     },
   })

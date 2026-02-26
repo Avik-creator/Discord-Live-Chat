@@ -21,6 +21,12 @@ export type SettingsData = {
     channelId: string | null
     channelName: string | null
   } | null
+  slack: {
+    workspaceId: string
+    workspaceName: string
+    channelId: string | null
+    channelName: string | null
+  } | null
 }
 
 export function useProjectSettings(projectId: string | undefined) {
@@ -49,6 +55,7 @@ export type SaveSettingsPayload = {
     aiModel: string
   }
   discord?: { channelId: string; channelName?: string }
+  slack?: { channelId: string; channelName?: string }
 }
 
 export function useSaveSettings(projectId: string | undefined) {
