@@ -31,9 +31,11 @@ export async function GET(
       { status: 404, headers: { ...corsHeadersStream(), "Content-Type": "application/json" } }
     )
   }
-  const response = createSSEStream(conversationId, req.signal)
-  return new Response(response.body, {
-    status: response.status,
-    headers: { ...response.headers, ...corsHeadersStream() },
+  const sseResponse = createSSEStream(conversationId, req.signal)
+  const headers = new Headers(sseResponse.headers)
+  Object.entries(corsHeadersStream()).forEach(([k, v]) => headers.set(k, v))
+  return new Response(sseResponse.body, {
+    status: sseResponse.status,
+    headers,
   })
 }

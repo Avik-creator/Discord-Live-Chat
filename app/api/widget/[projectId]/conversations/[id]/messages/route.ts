@@ -244,6 +244,7 @@ export async function POST(
 
   // Send to Slack
   if (slackConfig?.channelId) {
+    console.log(`[bridgecord] Slack config found: channelId=${slackConfig.channelId}, hasToken=${!!slackConfig.botToken}, threadTs=${conversation.slackThreadTs}`)
     try {
       if (!conversation.slackThreadTs) {
         // First message: create a thread
@@ -253,6 +254,7 @@ export async function POST(
           visitorLabel,
           content.trim()
         )
+        console.log(`[bridgecord] Slack thread created: threadTs=${result.threadTs}`)
         conversationUpdates.slackThreadTs = result.threadTs
       } else {
         // Subsequent message: post in existing thread
@@ -269,6 +271,8 @@ export async function POST(
       console.error("[bridgecord] Slack send failed:", err instanceof Error ? err.message : err)
       // Slack send failed, but continue with response
     }
+  } else {
+    console.log(`[bridgecord] Slack skipped: slackConfig=${!!slackConfig}, channelId=${slackConfig?.channelId}`)
   }
 
   // Update conversation with any new thread IDs and timestamp

@@ -67,16 +67,22 @@ export default function SettingsPage() {
   }, [searchParams, id, queryClient])
   const { data: channels } = useQuery({
     queryKey: ["channels", id, settings?.discord?.guildId],
-    queryFn: () =>
-      fetch(`/api/projects/${id}/discord/channels`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${id}/discord/channels`)
+      if (!res.ok) return []
+      return res.json()
+    },
     enabled: !!id && !!settings?.discord?.guildId,
   })
 
   // Fetch Slack channels
   const { data: slackChannels } = useQuery({
     queryKey: ["slackChannels", id, settings?.slack?.workspaceId],
-    queryFn: () =>
-      fetch(`/api/projects/${id}/slack/channels`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${id}/slack/channels`)
+      if (!res.ok) return []
+      return res.json()
+    },
     enabled: !!id && !!settings?.slack?.workspaceId,
   })
   const { data: crawlMeta } = useCrawlMeta(id)

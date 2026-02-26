@@ -56,15 +56,21 @@ export async function joinSlackChannel(
   botToken: string,
   channelId: string
 ): Promise<void> {
-  const res = await fetch(`${SLACK_API}/conversations.join`, {
-    method: "POST",
-    headers: botHeaders(botToken),
-    body: JSON.stringify({ channel: channelId }),
-  })
-  const data = await res.json()
-  // already_in_channel is fine — means the bot is already a member
-  if (!data.ok && data.error !== "already_in_channel") {
-    console.warn(`[slack] Could not join channel ${channelId}: ${data.error}`)
+  try {
+    const res = await fetch(`${SLACK_API}/conversations.join`, {
+      method: "POST",
+      headers: botHeaders(botToken),
+      body: JSON.stringify({ channel: channelId }),
+    })
+    const data = await res.json()
+    // already_in_channel is fine — means the bot is already a member
+    if (!data.ok && data.error !== "already_in_channel") {
+      console.warn(`[slack] Could not join channel ${channelId}: ${data.error}`)
+    } else {
+      console.log(`[slack] Join channel ${channelId}: ${data.ok ? "joined" : data.error}`)
+    }
+  } catch (err) {
+    console.warn(`[slack] Error joining channel ${channelId}:`, err)
   }
 }
 
@@ -74,6 +80,8 @@ export async function createSlackThread(
   visitorName: string,
   firstMessage: string
 ): Promise<{ threadTs: string; messageTs: string }> {
+  console.log(`[slack] Creating thread in channel ${channelId} for ${visitorName}`)
+
   // Ensure the bot is in the channel before posting
   await joinSlackChannel(botToken, channelId)
 
@@ -88,7 +96,7 @@ export async function createSlackThread(
           type: "header",
           text: {
             type: "plain_text",
-            text: `💬 New chat: ${visitorName}`,
+            text: `\uD83D\uDCAC New chat: ${visitorName}`,
             emoji: true,
           },
         },
@@ -114,6 +122,7 @@ export async function createSlackThread(
   })
 
   const data = await res.json()
+  console.log(`[slack] chat.postMessage response: ok=${data.ok}, error=${data.error}, ts=${data.ts}`)
   if (!data.ok) {
     throw new Error(`Failed to create Slack thread: ${data.error} (channel: ${channelId})`)
   }
@@ -252,6 +261,7 @@ export async function getWorkspaceInfo(
  * 
  * Required scopes for the bot:
  * - channels:read       - List public channels
+ * - channels:join       - Join public channels programmatically
  * - channels:history    - Read messages in public channels
  * - chat:write          - Send messages as bot
  * - chat:write.public   - Post to public channels without joining
@@ -263,6 +273,7 @@ export async function getWorkspaceInfo(
 export function getSlackInstallUrl(projectId: string, redirectUri: string): string {
   const scopes = [
     "channels:read",
+    "channels:join",
     "channels:history",
     "chat:write",
     "chat:write.public",
