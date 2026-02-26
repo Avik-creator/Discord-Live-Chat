@@ -303,3 +303,22 @@ export async function deleteDiscordThread(threadId: string): Promise<void> {
     console.warn(`[discord] Error deleting thread ${threadId}:`, err)
   }
 }
+
+
+/** Make the bot leave a guild */
+export async function leaveGuild(guildId: string): Promise<void> {
+  try {
+    const res = await fetch(`${DISCORD_API}/users/@me/guilds/${guildId}`, {
+      method: "DELETE",
+      headers: botHeaders(),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.warn(`[discord] Failed to leave guild ${guildId}: ${err}`)
+    } else {
+      console.log(`[discord] Successfully left guild ${guildId}`)
+    }
+  } catch (err) {
+    console.warn(`[discord] Error leaving guild ${guildId}:`, err)
+  }
+}

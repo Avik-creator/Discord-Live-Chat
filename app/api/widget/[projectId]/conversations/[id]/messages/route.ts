@@ -203,6 +203,8 @@ export async function POST(
     db.select().from(slackConfigs).where(eq(slackConfigs.projectId, projectId)),
   ])
 
+  console.log(`[bridgecord] Debug: projectId=${projectId}, slackResultCount=${slackConfigResult.length}, slackResult[0]=`, slackConfigResult[0])
+
   const discordConfig = discordConfigResult[0] ?? null
   const slackConfig = slackConfigResult[0] ?? null
 

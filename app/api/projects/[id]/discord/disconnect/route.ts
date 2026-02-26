@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { conversations, discordConfigs } from "@/lib/db/schema"
 import { eq, isNotNull, and } from "drizzle-orm"
 import { NextResponse } from "next/server"
-import { deleteDiscordThread } from "@/lib/discord"
+import { deleteDiscordThread, leaveGuild } from "@/lib/discord"
 
 /**
  * DELETE /api/projects/[id]/discord/disconnect
@@ -27,6 +27,11 @@ export async function DELETE(
 
   if (!discordConfig) {
     return NextResponse.json({ error: "Discord not connected" }, { status: 400 })
+  }
+
+  // Make the bot leave the guild
+  if (discordConfig.guildId) {
+    await leaveGuild(discordConfig.guildId)
   }
 
   // Find all conversations with Discord threads for this project
