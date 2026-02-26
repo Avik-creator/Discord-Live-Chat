@@ -184,8 +184,7 @@ export async function getWorkspaceChannels(
 ): Promise<Array<{ id: string; name: string }>> {
   const res = await fetch(
     `${SLACK_API}/conversations.list?${new URLSearchParams({
-      types: "public_channel",
-      exclude_archived: "true",
+      types: "public_channel,private_channel",
       limit: "200",
     })}`,
     { headers: botHeaders(botToken) }
@@ -197,7 +196,6 @@ export async function getWorkspaceChannels(
   }
 
   return data.channels
-    .filter((c: { is_member: boolean }) => c.is_member)
     .map((c: { id: string; name: string }) => ({
       id: c.id,
       name: c.name,
