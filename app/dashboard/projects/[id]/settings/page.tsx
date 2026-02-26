@@ -10,6 +10,8 @@ import { toast } from "sonner"
 import {
   useProjectSettings,
   useSaveSettings,
+  useDisconnectDiscord,
+  useDisconnectSlack,
   useCrawlMeta,
   useCrawlSite,
   type SaveSettingsPayload,
@@ -46,6 +48,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const { data: settings, isLoading: settingsLoading } = useProjectSettings(id)
   const saveSettings = useSaveSettings(id)
+  const disconnectDiscord = useDisconnectDiscord(id)
+  const disconnectSlack = useDisconnectSlack(id)
 
   useEffect(() => {
     if (searchParams.get("discord") === "connected" && id) {
@@ -246,6 +250,8 @@ export default function SettingsPage() {
             channelId={channelId}
             setChannelId={setChannelId}
             onOpenBotInvite={handleOpenBotInvite}
+            onDisconnect={() => disconnectDiscord.mutate()}
+            isDisconnecting={disconnectDiscord.isPending}
           />
         </TabsContent>
 
@@ -256,6 +262,8 @@ export default function SettingsPage() {
             channelId={slackChannelId}
             setChannelId={setSlackChannelId}
             onOpenSlackInstall={handleOpenSlackInstall}
+            onDisconnect={() => disconnectSlack.mutate()}
+            isDisconnecting={disconnectSlack.isPending}
           />
         </TabsContent>
 

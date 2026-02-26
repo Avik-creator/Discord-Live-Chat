@@ -287,3 +287,19 @@ export function getBotInviteUrl(
 
   return `https://discord.com/oauth2/authorize?${params}`
 }
+
+/** Delete a Discord thread (channel). Best-effort — does not throw on failure. */
+export async function deleteDiscordThread(threadId: string): Promise<void> {
+  try {
+    const res = await fetch(`${DISCORD_API}/channels/${threadId}`, {
+      method: "DELETE",
+      headers: botHeaders(),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.warn(`[discord] Failed to delete thread ${threadId}: ${err}`)
+    }
+  } catch (err) {
+    console.warn(`[discord] Error deleting thread ${threadId}:`, err)
+  }
+}

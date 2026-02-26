@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Check, ExternalLink, Hash } from "lucide-react"
+import { Check, ExternalLink, Hash, Unplug } from "lucide-react"
 
 type SlackInfo = {
   workspaceId: string
@@ -46,12 +46,16 @@ export function SlackTab({
   channelId,
   setChannelId,
   onOpenSlackInstall,
+  onDisconnect,
+  isDisconnecting,
 }: {
   slack: SlackInfo | null
   channels: Channel[] | undefined
   channelId: string
   setChannelId: (v: string) => void
   onOpenSlackInstall: () => void
+  onDisconnect: () => void
+  isDisconnecting: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -78,10 +82,16 @@ export function SlackTab({
                   </p>
                   <p className="text-[10px] text-muted-foreground">Connected</p>
                 </div>
-                <Badge variant="secondary" className="gap-1 text-[10px]">
-                  <Check className="h-2.5 w-2.5" />
-                  Connected
-                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDisconnect}
+                  disabled={isDisconnecting}
+                  className="gap-1 text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Unplug className="h-3 w-3" />
+                  {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+                </Button>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Chat Channel</Label>

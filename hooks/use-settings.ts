@@ -122,3 +122,51 @@ export function useCrawlSite(projectId: string | undefined) {
   })
 }
 
+
+export function useDisconnectDiscord(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/discord/disconnect`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to disconnect Discord")
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings", projectId] })
+      queryClient.invalidateQueries({ queryKey: ["channels", projectId] })
+      toast.success("Discord disconnected")
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to disconnect Discord")
+    },
+  })
+}
+
+export function useDisconnectSlack(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/slack/disconnect`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to disconnect Slack")
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings", projectId] })
+      queryClient.invalidateQueries({ queryKey: ["slackChannels", projectId] })
+      toast.success("Slack disconnected")
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to disconnect Slack")
+    },
+  })
+}

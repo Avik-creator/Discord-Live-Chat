@@ -316,3 +316,27 @@ export function verifySlackSignature(
     Buffer.from(signature)
   )
 }
+
+/**
+ * Delete a Slack thread by deleting the parent message.
+ * Best-effort — does not throw on failure.
+ */
+export async function deleteSlackThread(
+  botToken: string,
+  channelId: string,
+  threadTs: string
+): Promise<void> {
+  try {
+    const res = await fetch(`${SLACK_API}/chat.delete`, {
+      method: "POST",
+      headers: botHeaders(botToken),
+      body: JSON.stringify({ channel: channelId, ts: threadTs }),
+    })
+    const data = await res.json()
+    if (!data.ok) {
+      console.warn(`[slack] Failed to delete thread ${threadTs}: ${data.error}`)
+    }
+  } catch (err) {
+    console.warn(`[slack] Error deleting thread ${threadTs}:`, err)
+  }
+}
