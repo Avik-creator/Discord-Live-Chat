@@ -266,8 +266,8 @@ export async function POST(
         slackMessageTs = result.messageTs
       }
     } catch (err) {
-      console.error("[bridgecord] Slack send failed:", err)
-      // Slack send failed, but continue
+      console.error("[bridgecord] Slack send failed:", err instanceof Error ? err.message : err)
+      // Slack send failed, but continue with response
     }
   }
 

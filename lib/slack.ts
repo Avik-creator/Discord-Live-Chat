@@ -48,15 +48,35 @@ export async function exchangeCodeForToken(code: string, redirectUri: string): P
 }
 
 /**
- * Post initial message to a channel and return thread_ts for threading
- * In Slack, we use the parent message's ts as the thread identifier
+ * Join a Slack channel so the bot can post in it.
+ * This is required for private channels and for public channels when
+ * chat:write.public is not in scope. Returns true if already in channel or join succeeded.
  */
+export async function joinSlackChannel(
+  botToken: string,
+  channelId: string
+): Promise<void> {
+  const res = await fetch(`${SLACK_API}/conversations.join`, {
+    method: "POST",
+    headers: botHeaders(botToken),
+    body: JSON.stringify({ channel: channelId }),
+  })
+  const data = await res.json()
+  // already_in_channel is fine — means the bot is already a member
+  if (!data.ok && data.error !== "already_in_channel") {
+    console.warn(`[slack] Could not join channel ${channelId}: ${data.error}`)
+  }
+}
+
 export async function createSlackThread(
   botToken: string,
   channelId: string,
   visitorName: string,
   firstMessage: string
 ): Promise<{ threadTs: string; messageTs: string }> {
+  // Ensure the bot is in the channel before posting
+  await joinSlackChannel(botToken, channelId)
+
   // Post the initial message with an embed-like block
   const res = await fetch(`${SLACK_API}/chat.postMessage`, {
     method: "POST",
@@ -95,7 +115,7 @@ export async function createSlackThread(
 
   const data = await res.json()
   if (!data.ok) {
-    throw new Error(`Failed to create Slack thread: ${data.error}`)
+    throw new Error(`Failed to create Slack thread: ${data.error} (channel: ${channelId})`)
   }
 
   // The parent message's ts becomes our thread_ts
