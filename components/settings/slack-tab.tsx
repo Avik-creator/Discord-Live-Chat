@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Check, ExternalLink, Hash, Unplug } from "lucide-react"
+import { Check, ExternalLink, Hash, Unplug, Lock } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 type SlackInfo = {
   workspaceId: string
@@ -48,6 +49,7 @@ export function SlackTab({
   onOpenSlackInstall,
   onDisconnect,
   isDisconnecting,
+  discordConnected,
 }: {
   slack: SlackInfo | null
   channels: Channel[] | undefined
@@ -56,6 +58,7 @@ export function SlackTab({
   onOpenSlackInstall: () => void
   onDisconnect: () => void
   isDisconnecting: boolean
+  discordConnected: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -70,7 +73,14 @@ export function SlackTab({
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4 pt-4">
-          {slack?.workspaceId ? (
+          {discordConnected && !slack?.workspaceId ? (
+            <Alert className="border-amber-500/50 bg-amber-500/10">
+              <Lock className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-xs text-amber-600 dark:text-amber-400">
+                Discord is already connected to this project. Disconnect Discord first if you want to use Slack instead.
+              </AlertDescription>
+            </Alert>
+          ) : slack?.workspaceId ? (
             <>
               <div className="flex items-center gap-3 border border-border bg-accent/50 p-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4A154B]">

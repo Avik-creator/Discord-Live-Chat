@@ -17,11 +17,18 @@ import { sendThreadMessage } from "@/lib/discord"
  * Subscribe to bot events: message.channels
  */
 export async function POST(req: NextRequest) {
+  console.log(`[bridgecord] Slack webhook HIT - method=${req.method}, url=${req.url}`)
+  
   const rawBody = await req.text()
+  console.log(`[bridgecord] Slack webhook raw body:`, rawBody.substring(0, 500))
+  
   const body = JSON.parse(rawBody)
 
+  console.log(`[bridgecord] Slack webhook parsed body type: ${body.type}`)
+  
   // Handle Slack URL verification challenge
   if (body.type === "url_verification") {
+    console.log(`[bridgecord] Slack webhook - URL verification challenge`)
     return NextResponse.json({ challenge: body.challenge })
   }
 

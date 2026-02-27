@@ -258,6 +258,7 @@ export default function SettingsPage() {
             onOpenBotInvite={handleOpenBotInvite}
             onDisconnect={() => disconnectDiscord.mutate()}
             isDisconnecting={disconnectDiscord.isPending}
+            slackConnected={!!settings?.slack?.workspaceId}
           />
         </TabsContent>
 
@@ -270,6 +271,7 @@ export default function SettingsPage() {
             onOpenSlackInstall={handleOpenSlackInstall}
             onDisconnect={() => disconnectSlack.mutate()}
             isDisconnecting={disconnectSlack.isPending}
+            discordConnected={!!settings?.discord?.guildId}
           />
         </TabsContent>
 

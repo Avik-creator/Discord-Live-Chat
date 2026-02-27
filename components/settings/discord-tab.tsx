@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Check, ExternalLink, Hash, Unplug } from "lucide-react"
+import { Check, ExternalLink, Hash, Unplug, Lock } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 type DiscordInfo = {
   guildId: string
@@ -48,6 +49,7 @@ export function DiscordTab({
   onOpenBotInvite,
   onDisconnect,
   isDisconnecting,
+  slackConnected,
 }: {
   discord: DiscordInfo | null
   channels: Channel[] | undefined
@@ -56,6 +58,7 @@ export function DiscordTab({
   onOpenBotInvite: () => void
   onDisconnect: () => void
   isDisconnecting: boolean
+  slackConnected: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -70,7 +73,14 @@ export function DiscordTab({
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4 pt-4">
-          {discord?.guildId ? (
+          {slackConnected && !discord?.guildId ? (
+            <Alert className="border-amber-500/50 bg-amber-500/10">
+              <Lock className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-xs text-amber-600 dark:text-amber-400">
+                Slack is already connected to this project. Disconnect Slack first if you want to use Discord instead.
+              </AlertDescription>
+            </Alert>
+          ) : discord?.guildId ? (
             <>
               <div className="flex items-center gap-3 border border-border bg-accent/50 p-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5865F2]">
@@ -118,7 +128,7 @@ export function DiscordTab({
           ) : (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                No Discord server connected yet. Click the button below to add the bot to your server. After you select a server in Discord, you’ll be brought back here and it will be connected automatically.
+                No Discord server connected yet. Click the button below to add the bot to your server. After you select a server in Discord, you'll be brought back here and it will be connected automatically.
               </p>
               <Button
                 size="sm"
