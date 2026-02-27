@@ -105,14 +105,17 @@ async function handleThreadReply(event: {
 
   // Also send to Discord if this conversation has a Discord thread
   let discordMessageId: string | null = null
+  console.log(`[bridgecord] Slack webhook: checking Discord relay - hasThread=${!!conversation.discordThreadId}`)
   if (conversation.discordThreadId) {
     try {
+      console.log(`[bridgecord] Relaying Slack reply to Discord thread ${conversation.discordThreadId}`)
       const result = await sendThreadMessage(
         conversation.discordThreadId,
         text,
         agentName
       )
       discordMessageId = result.messageId
+      console.log(`[bridgecord] Successfully relayed to Discord: messageId=${result.messageId}`)
     } catch (err) {
       console.error("[bridgecord] Failed to relay Slack reply to Discord:", err)
       // Continue - Discord failure shouldn't stop the flow
