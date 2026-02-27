@@ -219,29 +219,36 @@ export async function POST(
   const conversationUpdates: Record<string, unknown> = { updatedAt: new Date() }
 
   // Send to Discord
+  console.log(`[bridgecord] Discord check: config=${!!discordConfig}, channelId=${discordConfig?.channelId}, hasThread=${!!conversation.discordThreadId}`)
   if (discordConfig?.channelId) {
     try {
       if (!conversation.discordThreadId) {
         // First message: create a thread
+        console.log(`[bridgecord] Creating Discord thread in channel ${discordConfig.channelId} for ${visitorLabel}`)
         const result = await createThread(
           discordConfig.channelId,
           visitorLabel,
           content.trim()
         )
+        console.log(`[bridgecord] Discord thread created: threadId=${result.threadId}`)
         conversationUpdates.discordThreadId = result.threadId
       } else {
         // Subsequent message: post in existing thread
+        console.log(`[bridgecord] Sending to existing Discord thread ${conversation.discordThreadId}`)
         const result = await sendThreadMessage(
           conversation.discordThreadId,
           content.trim(),
           visitorLabel
         )
+        console.log(`[bridgecord] Discord message sent: messageId=${result.messageId}`)
         discordMessageId = result.messageId
       }
     } catch (err) {
-      console.error("[bridgecord] Discord send failed:", err)
+      console.error("[bridgecord] Discord send failed:", err instanceof Error ? err.message : err)
       // Discord send failed, but continue with other platforms
     }
+  } else {
+    console.log(`[bridgecord] Discord skipped: no config or no channelId set`)
   }
 
   // Send to Slack
