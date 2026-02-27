@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare, User, ArrowRight } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
@@ -22,13 +23,36 @@ interface ConversationsListProps {
   initialConversations: Conversation[]
 }
 
+function ConversationsSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="flex items-start gap-3 border-b border-border p-3">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-none" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+            <Skeleton className="h-3 w-full max-w-[300px]" />
+          </div>
+          <div className="shrink-0 space-y-1 text-right">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-12 ml-auto" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function ConversationsList({
   projectId,
   initialConversations,
 }: ConversationsListProps) {
   const router = useRouter()
 
-  const { data: convos } = useQuery<Conversation[]>({
+  const { data: convos, isLoading } = useQuery<Conversation[]>({
     queryKey: ["conversations", projectId],
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/conversations`)
@@ -38,6 +62,14 @@ export function ConversationsList({
     initialData: initialConversations,
     refetchInterval: 5000,
   })
+
+  if (isLoading) {
+    return (
+      <Card className="p-0 overflow-hidden">
+        <ConversationsSkeleton />
+      </Card>
+    )
+  }
 
   if (!convos?.length) {
     return (

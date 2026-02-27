@@ -1,13 +1,14 @@
 import { requireAuth, requireProject } from "@/lib/api/auth"
 import { db } from "@/lib/db"
-import { conversations, discordConfigs } from "@/lib/db/schema"
+import { conversations, discordConfigs, messages } from "@/lib/db/schema"
 import { eq, isNotNull, and } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { deleteDiscordThread, leaveGuild } from "@/lib/discord"
 
 /**
  * DELETE /api/projects/[id]/discord/disconnect
- * Disconnect Discord: delete all Discord threads, clear conversation refs, remove config.
+ * Disconnect Discord: delete all Discord threads, delete all messages and conversations from DB, remove config.
+ * This creates a blank slate - all chat history is wiped.
  */
 export async function DELETE(
   _req: Request,
@@ -52,10 +53,26 @@ export async function DELETE(
       .map((c) => deleteDiscordThread(c.discordThreadId!))
   )
 
-  // Clear the discordThreadId from all conversations
+  // Get all conversation IDs for this project to delete their messages
+  const projectConversations = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(eq(conversations.projectId, id))
+
+  const conversationIds = projectConversations.map((c) => c.id)
+
+  // Delete all messages for these conversations (if any exist)
+  if (conversationIds.length > 0) {
+    for (const conversationId of conversationIds) {
+      await db
+        .delete(messages)
+        .where(eq(messages.conversationId, conversationId))
+    }
+  }
+
+  // Delete all conversations for this project
   await db
-    .update(conversations)
-    .set({ discordThreadId: null })
+    .delete(conversations)
     .where(eq(conversations.projectId, id))
 
   // Delete the discord config

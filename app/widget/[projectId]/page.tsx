@@ -240,11 +240,40 @@ export default function WidgetPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div
-          className="h-6 w-6 animate-spin border-2 border-current border-t-transparent"
-          style={{ color: primaryColor, borderRadius: "50%" }}
-        />
+      <div className="flex h-screen flex-col bg-background">
+        {/* Header skeleton */}
+        <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+          <div className="h-7 w-7 animate-pulse rounded-md bg-muted" />
+          <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+        </div>
+        {/* Messages skeleton */}
+        <div className="flex-1 space-y-4 overflow-hidden px-4 py-4">
+          {/* Agent message skeleton */}
+          <div className="flex gap-2.5">
+            <div className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-muted" />
+            <div className="space-y-2">
+              <div className="h-16 w-48 animate-pulse rounded-lg bg-muted" />
+            </div>
+          </div>
+          {/* Visitor message skeleton */}
+          <div className="flex flex-row-reverse gap-2.5">
+            <div className="h-12 w-32 animate-pulse rounded-lg bg-muted" />
+          </div>
+          {/* Agent message skeleton */}
+          <div className="flex gap-2.5">
+            <div className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-muted" />
+            <div className="space-y-2">
+              <div className="h-10 w-40 animate-pulse rounded-lg bg-muted" />
+            </div>
+          </div>
+        </div>
+        {/* Input skeleton */}
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-10 flex-1 animate-pulse rounded-md bg-muted" />
+            <div className="h-10 w-10 animate-pulse rounded-md bg-muted" />
+          </div>
+        </div>
       </div>
     )
   }

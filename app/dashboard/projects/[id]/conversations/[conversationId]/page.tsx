@@ -49,9 +49,55 @@ export default function ConversationPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-96" />
+      <div className="flex flex-col space-y-4">
+        {/* Back button skeleton */}
+        <Skeleton className="h-5 w-32" />
+        
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+          <Skeleton className="h-5 w-16" />
+        </div>
+
+        {/* Messages skeleton */}
+        <div className="space-y-4 border border-border bg-card p-4">
+          {/* Visitor message */}
+          <div className="flex flex-row-reverse gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="space-y-1">
+              <Skeleton className="h-10 w-48 rounded-lg" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+          </div>
+          {/* Agent message */}
+          <div className="flex gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="space-y-1">
+              <Skeleton className="h-14 w-64 rounded-lg" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+          </div>
+          {/* Visitor message */}
+          <div className="flex flex-row-reverse gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="space-y-1">
+              <Skeleton className="h-8 w-32 rounded-lg" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+          </div>
+        </div>
+
+        {/* Reply input skeleton */}
+        <div className="flex items-start gap-2 pt-2">
+          <Skeleton className="h-20 flex-1" />
+          <Skeleton className="h-10 w-20" />
+        </div>
       </div>
     )
   }

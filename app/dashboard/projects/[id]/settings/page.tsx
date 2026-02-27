@@ -219,14 +219,14 @@ export default function SettingsPage() {
             <TabsTrigger value="discord" className="text-xs">
               Discord
             </TabsTrigger>
+            <TabsTrigger value="slack" className="text-xs">
+              Slack
+            </TabsTrigger>
             <TabsTrigger value="widget" className="text-xs">
               Widget
             </TabsTrigger>
             <TabsTrigger value="ai" className="text-xs">
               AI Auto-Reply
-            </TabsTrigger>
-            <TabsTrigger value="slack" className="text-xs">
-              Slack
             </TabsTrigger>
           </TabsList>
 
