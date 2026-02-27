@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { conversations, messages } from "@/lib/db/schema"
+import { conversations, messages, slackConfigs } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { sseBus } from "@/lib/sse"
+import { sendSlackMessage } from "@/lib/slack"
 
 // This endpoint receives replies from Discord threads.
 // In production, a Discord bot listens for MESSAGE_CREATE gateway events
@@ -32,6 +33,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
   }
 
+  // Get Slack config to cross-post if connected
+  const [slackConfig] = await db
+    .select()
+    .from(slackConfigs)
+    .where(eq(slackConfigs.projectId, conversation.projectId))
+
+  // Also send to Slack if this conversation has a Slack thread
+  let slackMessageTs: string | null = null
+  if (conversation.slackThreadTs && slackConfig?.channelId && slackConfig?.botToken) {
+    try {
+      const result = await sendSlackMessage(
+        slackConfig.botToken,
+        slackConfig.channelId,
+        conversation.slackThreadTs,
+        content,
+        authorName || "Agent"
+      )
+      slackMessageTs = result.messageTs
+    } catch (err) {
+      console.error("[bridgecord] Failed to relay Discord reply to Slack:", err)
+      // Continue - Slack failure shouldn't stop the flow
+    }
+  }
+
   // Insert the message as an "agent" message
   const { nanoid } = await import("nanoid")
   const [msg] = await db
@@ -41,6 +66,7 @@ export async function POST(req: NextRequest) {
       conversationId: conversation.id,
       sender: "agent",
       content,
+      slackMessageTs,
     })
     .returning()
 
@@ -58,6 +84,7 @@ export async function POST(req: NextRequest) {
       conversationId: conversation.id,
       sender: "agent",
       content,
+      slackMessageTs,
       createdAt: new Date().toISOString(),
     },
   })

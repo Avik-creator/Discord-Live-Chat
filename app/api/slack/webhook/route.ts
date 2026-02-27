@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { conversations, messages, slackConfigs } from "@/lib/db/schema"
+import { conversations, messages, slackConfigs, discordConfigs } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { sseBus } from "@/lib/sse"
-import { verifySlackSignature } from "@/lib/slack"
+import { verifySlackSignature, sendSlackMessage } from "@/lib/slack"
+import { sendThreadMessage } from "@/lib/discord"
 
 /**
  * Webhook endpoint that receives events from Slack.
@@ -57,8 +58,9 @@ async function handleThreadReply(event: {
   text: string
   user: string
   ts: string
+  user_name?: string
 }) {
-  const { channel, thread_ts, text, user, ts } = event
+  const { channel, thread_ts, text, user, ts, user_name } = event
 
   // Find the conversation by its Slack thread timestamp
   const [conversation] = await db
@@ -98,6 +100,25 @@ async function handleThreadReply(event: {
     return
   }
 
+  // Get agent name from the event or use a default
+  const agentName = user_name || "Agent"
+
+  // Also send to Discord if this conversation has a Discord thread
+  let discordMessageId: string | null = null
+  if (conversation.discordThreadId) {
+    try {
+      const result = await sendThreadMessage(
+        conversation.discordThreadId,
+        text,
+        agentName
+      )
+      discordMessageId = result.messageId
+    } catch (err) {
+      console.error("[bridgecord] Failed to relay Slack reply to Discord:", err)
+      // Continue - Discord failure shouldn't stop the flow
+    }
+  }
+
   // Insert the message as an "agent" message
   const { nanoid } = await import("nanoid")
   const [msg] = await db
@@ -108,6 +129,7 @@ async function handleThreadReply(event: {
       sender: "agent",
       content: text,
       slackMessageTs: ts,
+      discordMessageId,
     })
     .returning()
 
@@ -126,6 +148,7 @@ async function handleThreadReply(event: {
       sender: "agent",
       content: text,
       slackMessageTs: ts,
+      discordMessageId,
       createdAt: new Date().toISOString(),
     },
   })
